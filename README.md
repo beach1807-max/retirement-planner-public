@@ -1,5 +1,8 @@
 # 安心退休規劃 PWA
 
+- 正式網站：[https://retirement-planner-pwa.pages.dev](https://retirement-planner-pwa.pages.dev)
+- GitHub：[beach1807-max/retirement-planner-pwa](https://github.com/beach1807-max/retirement-planner-pwa)（私有儲存庫）
+
 以主要規劃人為核心、同時整合家庭可用資源的退休資產規劃工具。第一版回答：
 
 1. 依目前資料與假設，最早約在什麼月份可以退休？
@@ -71,4 +74,3 @@ npm run deploy:preview
 ## 重要聲明
 
 本工具結果依使用者提供的資料與固定假設估算，不保證未來投資報酬、實際支出或法規結果。第一版不提供個別證券推介、交易指示或自動下單。實際勞保、勞退資格及金額以主管機關核定為準。
-
