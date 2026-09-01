@@ -69,6 +69,7 @@ describe('退休計算引擎', () => {
     input.assets[1].retirementUsageScope = 'personal'
     const personal = await calculateRetirement(input)
     expect(personal.includedDataSummary.assetIds).not.toContain('asset-b')
+    expect(personal.retirementAssetsAtRetirement).not.toBe(household.retirementAssetsAtRetirement)
   })
 
   it('共同資產在家庭檢視只計一次', async () => {
@@ -146,5 +147,25 @@ describe('退休計算引擎', () => {
     const result = await calculateRetirement(input)
     expect(result.status).toBe('error')
     expect(result.errors.some((error) => error.code === 'CONTRIBUTION_DESTINATION_EXCLUDED')).toBe(true)
+  })
+
+  it('不支援的規則版本會阻止計算', async () => {
+    const input = fixture()
+    input.ruleVersion = 'unknown-rules'
+    const result = await calculateRetirement(input)
+    expect(result.status).toBe('error')
+    expect(result.errors.some((error) => error.code === 'UNSUPPORTED_RULE_VERSION')).toBe(true)
+  })
+
+  it('沒有有效資產或資產為負數時會阻止計算', async () => {
+    const missing = fixture()
+    missing.assets = []
+    const missingResult = await calculateRetirement(missing)
+    expect(missingResult.errors.some((error) => error.code === 'RETIREMENT_ASSET_MISSING')).toBe(true)
+
+    const negative = fixture()
+    negative.assets[0].currentValueTwd = '-1'
+    const negativeResult = await calculateRetirement(negative)
+    expect(negativeResult.errors.some((error) => error.code === 'NEGATIVE_AMOUNT')).toBe(true)
   })
 })

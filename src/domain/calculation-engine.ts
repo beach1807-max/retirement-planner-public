@@ -28,6 +28,12 @@ interface SimulationResult {
   timeline: MonthlyTimelineItem[]
 }
 
+interface SimulationContext {
+  inflationFactors: Map<string, Decimal>
+  oneTimeExpenses: Map<string, Decimal>
+  monthlyReturnRates: Map<string, Decimal>
+}
+
 const ZERO = new Decimal(0)
 
 function money(value: Decimal): string {
@@ -44,6 +50,12 @@ function validateInput(input: CalculationInput): CalculationMessage[] {
   if (!primary) errors.push({ code: 'PRIMARY_MEMBER_MISSING', message: '找不到主要規劃人。' })
   if (input.contractVersion !== 'calculation-contract-v0.1') {
     errors.push({ code: 'UNSUPPORTED_CONTRACT', message: '不支援此計算契約版本。' })
+  }
+  if (input.ruleVersion !== 'rules-none-v0.1') {
+    errors.push({ code: 'UNSUPPORTED_RULE_VERSION', message: '不支援此規則版本。' })
+  }
+  if (!input.assets.some((asset) => asset.status === 'provided')) {
+    errors.push({ code: 'RETIREMENT_ASSET_MISSING', message: '至少需要一筆有效退休資產，明確的 0 元資產也可以。' })
   }
   try {
     toMonth(input.calculationBaseDate)
@@ -72,6 +84,7 @@ function validateInput(input: CalculationInput): CalculationMessage[] {
       .filter((contribution) => contribution.status === 'provided')
       .map((contribution) => contribution.amountTwd),
     ...input.assumptions.returnProfiles.map((profile) => profile.annualReturnRate),
+    ...input.retirementPlan.oneTimeExpenses.map((expense) => expense.amountTwdReal),
   ]
   try {
     if (decimalFields.some((value) => !new Decimal(value).isFinite())) {
@@ -79,6 +92,18 @@ function validateInput(input: CalculationInput): CalculationMessage[] {
     }
   } catch {
     errors.push({ code: 'INVALID_NUMBER', message: '金額或利率格式無效。' })
+  }
+  if (errors.some((error) => error.code === 'INVALID_NUMBER')) return errors
+  const nonNegativeAmounts = [
+    input.retirementPlan.retirementExpenseMonthlyRealTwd,
+    input.retirementPlan.safetyReserveRealTwd,
+    input.retirementPlan.legacyTargetRealTwd,
+    ...input.assets.filter((asset) => asset.status === 'provided').map((asset) => asset.currentValueTwd),
+    ...input.contributions.filter((item) => item.status === 'provided').map((item) => item.amountTwd),
+    ...input.retirementPlan.oneTimeExpenses.map((expense) => expense.amountTwdReal),
+  ]
+  if (nonNegativeAmounts.some((value) => new Decimal(value).lt(0))) {
+    errors.push({ code: 'NEGATIVE_AMOUNT', message: '資產、投入與支出金額不可為負數。' })
   }
   if (new Decimal(input.assumptions.annualInflationRate).lte(-1)) {
     errors.push({ code: 'INVALID_INFLATION', message: '通膨率必須大於 -100%。' })
@@ -198,7 +223,7 @@ function sumBalances(buckets: AssetBucket[]): Decimal {
   return buckets.reduce((sum, bucket) => sum.plus(bucket.activated ? bucket.balance : ZERO), ZERO)
 }
 
-function createBuckets(input: CalculationInput, includedAssets: Asset[]): AssetBucket[] {
+function createBuckets(input: CalculationInput, includedAssets: Asset[], context: SimulationContext): AssetBucket[] {
   const profiles = new Map(input.assumptions.returnProfiles.map((profile) => [profile.id, profile]))
   const defaultProfile = profiles.get(input.retirementPlan.defaultReturnProfileId)
   if (!defaultProfile) throw new Error('找不到預設報酬設定檔。')
@@ -210,7 +235,7 @@ function createBuckets(input: CalculationInput, includedAssets: Asset[]): AssetB
       initialValue: new Decimal(asset.currentValueTwd),
       availableMonth: toMonth(asset.availableFrom),
       activated: false,
-      monthlyReturnRate: monthlyRate(profile.annualReturnRate),
+      monthlyReturnRate: context.monthlyReturnRates.get(profile.id) ?? monthlyRate(profile.annualReturnRate),
     }
   })
 }
@@ -221,11 +246,10 @@ function simulate(
   planEndMonth: string,
   includedAssets: Asset[],
   includedContributions: Contribution[],
+  context: SimulationContext,
 ): SimulationResult {
-  const buckets = createBuckets(input, includedAssets)
+  const buckets = createBuckets(input, includedAssets, context)
   const profiles = new Map(input.assumptions.returnProfiles.map((profile) => [profile.id, profile]))
-  const inflationRate = new Decimal(input.assumptions.annualInflationRate)
-  const monthlyInflation = monthlyRate(inflationRate.toString())
   const baseMonth = toMonth(input.calculationBaseDate)
   const timeline: MonthlyTimelineItem[] = []
   let retirementAssets = ZERO
@@ -244,14 +268,11 @@ function simulate(
     }
     if (month === candidateRetirementMonth) retirementAssets = sumBalances(buckets)
 
-    const monthOffset = monthsBetween(baseMonth, month)
-    const inflationFactor = new Decimal(1).plus(inflationRate).pow(new Decimal(monthOffset).div(12))
+    const inflationFactor = context.inflationFactors.get(month) ?? new Decimal(1)
     const retirementExpense = monthIndex(month) >= monthIndex(candidateRetirementMonth)
       ? new Decimal(input.retirementPlan.retirementExpenseMonthlyRealTwd).mul(inflationFactor)
       : ZERO
-    const oneTimeExpenses = input.retirementPlan.oneTimeExpenses
-      .filter((expense) => toMonth(expense.month) === month)
-      .reduce((sum, expense) => sum.plus(new Decimal(expense.amountTwdReal).mul(inflationFactor)), ZERO)
+    const oneTimeExpenses = context.oneTimeExpenses.get(month) ?? ZERO
     const totalWithdrawal = retirementExpense.plus(oneTimeExpenses)
     if (!withdrawProportionally(buckets, totalWithdrawal)) failed = true
 
@@ -281,7 +302,7 @@ function simulate(
             initialValue: ZERO,
             availableMonth: baseMonth,
             activated: true,
-            monthlyReturnRate: monthlyRate(profile.annualReturnRate),
+            monthlyReturnRate: context.monthlyReturnRates.get(profile.id) ?? monthlyRate(profile.annualReturnRate),
           }
           buckets.push(bucket)
         }
@@ -293,7 +314,7 @@ function simulate(
     }
 
     const closingAssets = failed ? ZERO : sumBalances(buckets)
-    const realFactor = new Decimal(1).plus(monthlyInflation).pow(monthOffset)
+    const realFactor = inflationFactor
     timeline.push({
       month,
       openingAssets: money(openingAssets),
@@ -310,8 +331,7 @@ function simulate(
   }
 
   const endingAssetsNominal = failed ? ZERO : sumBalances(buckets)
-  const totalMonths = monthsBetween(baseMonth, planEndMonth)
-  const endingInflationFactor = new Decimal(1).plus(inflationRate).pow(new Decimal(totalMonths).div(12))
+  const endingInflationFactor = context.inflationFactors.get(planEndMonth) ?? new Decimal(1)
   const endingAssetsReal = endingAssetsNominal.div(endingInflationFactor)
   const requiredEndingAssets = new Decimal(input.retirementPlan.safetyReserveRealTwd)
     .plus(input.retirementPlan.legacyTargetRealTwd)
@@ -368,11 +388,30 @@ export async function calculateRetirement(input: CalculationInput): Promise<Calc
 
   const planEndMonth = addMonths(primary.birthDate, primary.planningEndAge * 12)
   const earliestMonth = toMonth(input.retirementPlan.earliestRetirementMonth)
+  const baseMonth = toMonth(input.calculationBaseDate)
+  const inflationRate = new Decimal(input.assumptions.annualInflationRate)
+  const inflationFactors = new Map<string, Decimal>()
+  for (let cursor = monthIndex(baseMonth); cursor <= monthIndex(planEndMonth); cursor += 1) {
+    const month = addMonths(baseMonth, cursor - monthIndex(baseMonth))
+    const offset = monthsBetween(baseMonth, month)
+    inflationFactors.set(month, new Decimal(1).plus(inflationRate).pow(new Decimal(offset).div(12)))
+  }
+  const oneTimeExpenses = new Map<string, Decimal>()
+  for (const expense of input.retirementPlan.oneTimeExpenses) {
+    const month = toMonth(expense.month)
+    const nominalAmount = new Decimal(expense.amountTwdReal).mul(inflationFactors.get(month) ?? 1)
+    oneTimeExpenses.set(month, (oneTimeExpenses.get(month) ?? ZERO).plus(nominalAmount))
+  }
+  const context: SimulationContext = {
+    inflationFactors,
+    oneTimeExpenses,
+    monthlyReturnRates: new Map(input.assumptions.returnProfiles.map((profile) => [profile.id, monthlyRate(profile.annualReturnRate)])),
+  }
   let lastSimulation: SimulationResult | null = null
   for (let cursor = monthIndex(earliestMonth); cursor <= monthIndex(planEndMonth); cursor += 1) {
     const candidate = addMonths(earliestMonth, cursor - monthIndex(earliestMonth))
     try {
-      const simulation = simulate(input, candidate, planEndMonth, includedAssets, includedContributions)
+      const simulation = simulate(input, candidate, planEndMonth, includedAssets, includedContributions, context)
       lastSimulation = simulation
       if (simulation.success) {
         return {

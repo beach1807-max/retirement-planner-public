@@ -43,7 +43,7 @@ npm run check
 npm run test:e2e
 ```
 
-- `npm run check`：ESLint、14 項單元／整合測試、TypeScript 與正式建置。
+- `npm run check`：ESLint、17 項單元／整合測試、TypeScript 與正式建置。
 - `npm run test:e2e`：使用系統 Chrome 執行桌面與行動版操作、IndexedDB、備份、響應式及離線 PWA 測試。
 
 ## Cloudflare Pages
