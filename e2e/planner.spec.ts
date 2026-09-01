@@ -1,0 +1,74 @@
+import { expect, test } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('retirement-planner-pwa')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => resolve()
+    })
+  })
+  await page.reload()
+})
+
+test('可載入展示資料、完成計算並在重新開啟後保留資料', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('家庭退休資產時間線')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('林家退休計畫')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+})
+
+test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  if (isMobile) await page.getByRole('button', { name: '家庭資料' }).click()
+  else await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '新增資產' }).click()
+  await page.getByLabel('資產名稱').fill('緊急預備金')
+  await page.getByLabel('目前價值（TWD）').fill('300000')
+  await page.getByRole('button', { name: '儲存資產' }).click()
+  await expect(page.getByText('緊急預備金')).toBeVisible()
+  await page.getByLabel('伴侶家庭可用資產 退休使用範圍').selectOption('personal')
+  await expect(page.getByText('個人退休使用').first()).toBeVisible()
+})
+
+test('備份頁可以下載版本化 JSON', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '備份還原' }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '匯出 JSON 備份' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^退休規劃備份_\d{4}-\d{2}-\d{2}\.json$/)
+})
+
+test('視覺稽核截圖', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true })
+})
+
+test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '20px' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await expect(page.getByRole('button', { name: '家庭資料' })).toBeVisible()
+})
+
+test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByText('林家退休計畫')).toBeVisible()
+  await context.setOffline(false)
+})
