@@ -88,8 +88,32 @@ export interface PlannerLiability extends EntityTimestamps, OwnershipFields {
   status: DataStatus
 }
 
+export interface PlannerRetirementSystem extends EntityTimestamps {
+  id: string
+  householdId: string
+  memberId: string
+  ruleVersion: 'tw-labor-rules-2026-08-20'
+  status: DataStatus
+  laborInsurance: {
+    enabled: boolean
+    averageInsuredSalaryTwd: string
+    insuredYears: string
+    claimAge: number
+  }
+  laborPension: {
+    enabled: boolean
+    currentAccountBalanceTwd: string
+    contributionYears: string
+    monthlyContributionSalaryTwd: string
+    employerContributionRate: string
+    voluntaryContributionRate: string
+    projectedAnnualReturnRate: string
+    claimAge: number
+  }
+}
+
 export interface PlannerData {
-  schemaVersion: 'planner-data-v0.3'
+  schemaVersion: 'planner-data-v0.4'
   calculationBaseDate: string
   household: PlannerHousehold
   members: PlannerMember[]
@@ -100,6 +124,7 @@ export interface PlannerData {
   incomes: PlannerIncome[]
   expenses: PlannerExpense[]
   liabilities: PlannerLiability[]
+  retirementSystems: PlannerRetirementSystem[]
   retirementPlan: RetirementPlan
   assumptions: Assumptions
   ruleVersion: 'rules-none-v0.1'
@@ -125,9 +150,9 @@ export function createStarterData(input: StarterDataInput): PlannerData {
   const members: PlannerMember[] = [{ id: primaryId, householdId, name: input.primaryName, role: 'primary', birthDate: input.primaryBirthDate, planningEndAge: input.planningEndAge, plannedRetirementMonth: input.primaryPlannedRetirementMonth, isActive: true, createdAt: timestamp, updatedAt: timestamp }]
   if (input.partnerName && input.partnerBirthDate) members.push({ id: crypto.randomUUID(), householdId, name: input.partnerName, role: 'partner', birthDate: input.partnerBirthDate, planningEndAge: input.planningEndAge, isActive: true, createdAt: timestamp, updatedAt: timestamp })
   return {
-    schemaVersion: 'planner-data-v0.3', calculationBaseDate: input.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.4', calculationBaseDate: input.calculationBaseDate,
     household: { id: householdId, name: input.householdName, baseCurrency: 'TWD', primaryMemberId: primaryId, createdAt: timestamp, updatedAt: timestamp },
-    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [],
+    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [],
     retirementPlan: { earliestRetirementMonth: input.calculationBaseDate.slice(0, 7), retirementExpenseMonthlyRealTwd: '50000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0', defaultReturnProfileId: 'balanced', oneTimeExpenses: [] },
     assumptions: { annualInflationRate: '0.02', returnProfiles: [{ id: 'cash', name: '現金／保守 1.5%', annualReturnRate: '0.015' }, { id: 'balanced', name: '基準 6%', annualReturnRate: '0.06' }, { id: 'growth', name: '成長 8%', annualReturnRate: '0.08' }] },
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,
@@ -153,5 +178,6 @@ export function createDemoData(calculationBaseDate: string): PlannerData {
   ]
   data.expenses = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '家庭平均生活支出', monthlyAmount: { amount: '60000', currency: 'TWD' }, ownershipType: 'household', status: 'provided', ...timestamps }]
   data.liabilities = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '房貸', liabilityType: 'mortgage', currentBalance: { amount: '2000000', currency: 'TWD' }, monthlyPayment: { amount: '25000', currency: 'TWD' }, ownershipType: 'household', status: 'provided', ...timestamps }]
+  data.retirementSystems = data.members.map((member) => ({ id: crypto.randomUUID(), householdId: data.household.id, memberId: member.id, ruleVersion: 'tw-labor-rules-2026-08-20', status: member.role === 'primary' ? 'provided' : 'notProvided', laborInsurance: { enabled: member.role === 'primary', averageInsuredSalaryTwd: member.role === 'primary' ? '45800' : '0', insuredYears: member.role === 'primary' ? '28' : '0', claimAge: 65 }, laborPension: { enabled: member.role === 'primary', currentAccountBalanceTwd: member.role === 'primary' ? '1200000' : '0', contributionYears: member.role === 'primary' ? '15' : '0', monthlyContributionSalaryTwd: member.role === 'primary' ? '45800' : '0', employerContributionRate: '0.06', voluntaryContributionRate: '0', projectedAnnualReturnRate: '0.02', claimAge: 60 }, ...timestamps }))
   return data
 }

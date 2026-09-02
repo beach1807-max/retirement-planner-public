@@ -114,6 +114,19 @@ test('可保存一次性支出並重新產生預測', async ({ page }) => {
   await expect(page.getByText('退休目標資產')).toBeVisible({ timeout: 15_000 })
 })
 
+test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '退休制度' }).click()
+  await expect(page.getByText('tw-labor-rules-2026-08-20')).toBeVisible()
+  const primaryPanel = page.locator('section.panel').filter({ hasText: '主要規劃人 A' })
+  await expect(primaryPanel.getByText('勞保月領估算')).toBeVisible()
+  await expect(primaryPanel.getByText(/首期月領約/)).toBeVisible()
+  await primaryPanel.getByRole('button', { name: '儲存並估算' }).click()
+  await expect(page.getByText('退休制度資料已儲存並重新估算。')).toBeVisible()
+  await page.getByRole('button', { name: '退休總覽' }).click()
+  await expect(page.getByText('勞保／勞退估算')).toBeVisible({ timeout: 15_000 })
+})
+
 test('備份頁可以下載版本化 JSON', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByRole('button', { name: '備份還原' }).click()

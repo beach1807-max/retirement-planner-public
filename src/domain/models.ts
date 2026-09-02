@@ -173,6 +173,7 @@ export interface ProjectionInput {
   incomes: ProjectionCashFlow[]
   expenses: ProjectionCashFlow[]
   liabilities: ProjectionLiability[]
+  retirementBenefits: ProjectionCashFlow[]
 }
 
 export interface ProjectionTimelineItem {
@@ -180,6 +181,7 @@ export interface ProjectionTimelineItem {
   income: string
   generalExpenses: string
   liabilityPayments: string
+  retirementIncomeReal: string
   explicitContributions: string
   unallocatedCashFlow: string
   liabilityBalance: string

@@ -3,8 +3,9 @@ import type { PlannerData } from './planner-data'
 export function migratePlannerData(value: unknown): PlannerData {
   const data = value as Record<string, unknown> & { schemaVersion?: string; updatedAt?: string }
   if (!data || typeof data !== 'object') throw new Error('INVALID_PLANNER_DATA')
-  if (data.schemaVersion === 'planner-data-v0.3') return data as unknown as PlannerData
-  if (data.schemaVersion === 'planner-data-v0.2') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'accounts' | 'holdings' | 'incomes' | 'expenses' | 'liabilities'>), schemaVersion: 'planner-data-v0.3', accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [] }
+  if (data.schemaVersion === 'planner-data-v0.4') return data as unknown as PlannerData
+  if (data.schemaVersion === 'planner-data-v0.3') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'retirementSystems'>), schemaVersion: 'planner-data-v0.4', retirementSystems: [] }
+  if (data.schemaVersion === 'planner-data-v0.2') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'accounts' | 'holdings' | 'incomes' | 'expenses' | 'liabilities' | 'retirementSystems'>), schemaVersion: 'planner-data-v0.4', accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [] }
   if (data.schemaVersion !== 'planner-data-v0.1' || typeof data.updatedAt !== 'string') throw new Error('UNSUPPORTED_SCHEMA_VERSION')
   const legacy = data as unknown as {
     calculationBaseDate: string; household: PlannerData['household']; members: PlannerData['members'];
@@ -14,13 +15,13 @@ export function migratePlannerData(value: unknown): PlannerData {
   }
   const timestamp = legacy.updatedAt
   return {
-    schemaVersion: 'planner-data-v0.3', calculationBaseDate: legacy.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.4', calculationBaseDate: legacy.calculationBaseDate,
     household: { ...legacy.household, createdAt: legacy.household.createdAt ?? timestamp, updatedAt: legacy.household.updatedAt ?? timestamp },
     members: legacy.members.map((member) => ({ ...member, createdAt: member.createdAt ?? timestamp, updatedAt: member.updatedAt ?? timestamp })),
     assets: legacy.assets.map(({ currentValueTwd, ...asset }) => ({ ...asset, currentValue: { amount: currentValueTwd, currency: 'TWD' }, createdAt: asset.createdAt ?? timestamp, updatedAt: asset.updatedAt ?? timestamp })),
     contributions: legacy.contributions.map(({ amountTwd, ...contribution }) => ({ ...contribution, amount: { amount: amountTwd, currency: 'TWD' }, createdAt: contribution.createdAt ?? timestamp, updatedAt: contribution.updatedAt ?? timestamp })),
     retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions,
-    accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [],
+    accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [],
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,
   }
 }

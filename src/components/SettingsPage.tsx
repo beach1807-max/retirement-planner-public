@@ -60,7 +60,7 @@ export function SettingsPage({ data, onChange }: Props) {
           <div className="form-actions"><span className="save-status" role="status">{saved ? '設定已儲存並重新計算。' : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存設定</button></div>
         </form>
       </section>
-      <div className="alert info">第一版尚未納入稅務、交易成本、完整勞保／勞退與隨機市場波動；相關模組介面已保留。</div>
+      <div className="alert info">目前尚未納入稅務、交易成本與隨機市場波動；勞保／勞退請至「退休制度」依版本化規則估算。</div>
     </div>
   )
 }

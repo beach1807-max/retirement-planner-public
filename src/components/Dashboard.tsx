@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Clock3, Info, WalletCards } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PlannerData } from '../application/planner-data'
-import type { DashboardScope, DashboardViewModel } from '../application/planner-service'
+import type { DashboardScope, DashboardViewModel, RetirementSystemView } from '../application/planner-service'
 import type { CalculationResult, ProjectionResult } from '../domain/models'
 
-interface Props { data: PlannerData; viewModel: DashboardViewModel; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; projection: ProjectionResult | null; calculating: boolean }
+interface Props { data: PlannerData; viewModel: DashboardViewModel; systemEstimates: RetirementSystemView[]; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; projection: ProjectionResult | null; calculating: boolean }
 
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 
-export function Dashboard({ data, viewModel, onScopeChange, result, projection, calculating }: Props) {
+export function Dashboard({ data, viewModel, systemEstimates, onScopeChange, result, projection, calculating }: Props) {
   const scope = viewModel.scope
   const [moneyMode, setMoneyMode] = useState<'real' | 'nominal'>('real')
   const partner = data.members.find((member) => member.role === 'partner')
@@ -66,11 +66,17 @@ export function Dashboard({ data, viewModel, onScopeChange, result, projection, 
       </section>
 
       <section className="panel">
+        <div className="panel-heading"><div><h3>勞保／勞退估算</h3><p>各成員分開計算後，以外部收入事件併入同一家庭時間軸。</p></div><small>規則 tw-labor-rules-2026-08-20</small></div>
+        <div className="retirement-system-results">{systemEstimates.map((view) => <article key={view.memberId}><span>{view.memberName}</span><strong>{view.estimate ? currency.format(Number(view.estimate.laborInsurance.monthlyBenefitRealTwd ?? 0) + Number(view.estimate.laborPension.monthlyBenefitRealTwd ?? 0)) : '資料未提供'}</strong><small>{view.estimate ? '每月合計估算 · 今天購買力' : view.status === 'notApplicable' ? '不適用' : '請至退休制度補齊'}</small></article>)}</div>
+      </section>
+
+      <section className="panel">
         <div className="panel-heading"><div><h3>家庭每月現金流基線</h3><p>收入扣除一般支出、負債還款與明確投入；投入只計入退休資產一次。</p></div><small>{currentFlow?.month ?? '—'}</small></div>
         <div className="cashflow-grid">
           <article><span>收入</span><strong>{currentFlow ? currency.format(Number(currentFlow.income)) : '—'}</strong></article>
           <article><span>一般支出</span><strong>{currentFlow ? currency.format(Number(currentFlow.generalExpenses)) : '—'}</strong></article>
           <article><span>負債還款</span><strong>{currentFlow ? currency.format(Number(currentFlow.liabilityPayments)) : '—'}</strong></article>
+          <article><span>退休制度收入</span><strong>{currentFlow ? currency.format(Number(currentFlow.retirementIncomeReal)) : '—'}</strong></article>
           <article><span>明確投入</span><strong>{currentFlow ? currency.format(Number(currentFlow.explicitContributions)) : '—'}</strong></article>
           <article><span>未配置現金流</span><strong>{currentFlow ? currency.format(Number(currentFlow.unallocatedCashFlow)) : '—'}</strong></article>
           <article><span>負債餘額</span><strong>{currentFlow ? currency.format(Number(currentFlow.liabilityBalance)) : '—'}</strong></article>

@@ -23,7 +23,7 @@ describe('Planner Service 與遷移', () => {
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
-    expect(migrated.schemaVersion).toBe('planner-data-v0.3')
+    expect(migrated.schemaVersion).toBe('planner-data-v0.4')
     expect(migrated.assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     expect(migrated.assets[0].createdAt).toBe(legacy.updatedAt)
     const legacyInput = { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${legacy.household.id}`, calculationBaseDate: legacy.calculationBaseDate, household: legacy.household, members: legacy.members, assets: legacy.assets, contributions: legacy.contributions, retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions, ruleVersion: 'rules-none-v0.1' } as CalculationInput

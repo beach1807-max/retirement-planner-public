@@ -30,7 +30,8 @@ function targetAssets(input: ProjectionInput): Decimal | null {
   let required = new Decimal(base.retirementPlan.safetyReserveRealTwd).plus(base.retirementPlan.legacyTargetRealTwd).mul(inflation(planEndMonth))
   for (let cursor = monthIndex(planEndMonth); cursor >= monthIndex(plannedMonth); cursor -= 1) {
     const month = addMonths(plannedMonth, cursor - monthIndex(plannedMonth))
-    const withdrawalReal = new Decimal(base.retirementPlan.retirementExpenseMonthlyRealTwd).plus(oneTime.get(month) ?? ZERO)
+    const benefitsReal = input.retirementBenefits.reduce((sum, flow) => sum.plus(monthlyFlow(flow, month)), ZERO)
+    const withdrawalReal = Decimal.max(ZERO, new Decimal(base.retirementPlan.retirementExpenseMonthlyRealTwd).plus(oneTime.get(month) ?? ZERO).minus(benefitsReal))
     required = required.div(new Decimal(1).plus(monthlyReturn)).plus(withdrawalReal.mul(inflation(month)))
   }
   return required.div(inflation(plannedMonth)).toDecimalPlaces(2)
@@ -70,9 +71,10 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
       remainingPayments = remainingPayments.plus(Decimal.min(balance, new Decimal(liability.monthlyPaymentTwd)))
     }
     const contributions = new Decimal(item.contributions)
+    const retirementIncomeReal = input.retirementBenefits.reduce((sum, flow) => sum.plus(monthlyFlow(flow, item.month)), ZERO)
     const unallocated = income.minus(expenses).minus(remainingPayments).minus(contributions)
     if (unallocated.lt(0) && !warnings.some((warning) => warning.code === 'NEGATIVE_PRE_RETIREMENT_CASH_FLOW')) warnings.push({ code: 'NEGATIVE_PRE_RETIREMENT_CASH_FLOW', message: '明確投入高於收入扣除一般支出與負債還款後的餘額；系統未重複扣除投入。' })
-    return { month: item.month, income: money(income), generalExpenses: money(expenses), liabilityPayments: money(remainingPayments), explicitContributions: money(contributions), unallocatedCashFlow: money(unallocated), liabilityBalance: money(liabilityBalance) }
+    return { month: item.month, income: money(income), generalExpenses: money(expenses), liabilityPayments: money(remainingPayments), retirementIncomeReal: money(retirementIncomeReal), explicitContributions: money(contributions), unallocatedCashFlow: money(unallocated), liabilityBalance: money(liabilityBalance) }
   })
   const milestones = [50, 55, 60, 65].map((age) => {
     const month = addMonths(primary.birthDate, age * 12)
@@ -86,6 +88,6 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
     retirementTargetAssetsReal: target === null ? null : money(target),
     readinessRate: readiness ? readiness.toDecimalPlaces(1).toString() : null,
     readinessStatus: target?.eq(0) || (readiness?.gte(100) ?? false) ? 'achieved' : target && projectedReal ? 'notAchieved' : 'unavailable',
-    fixedRetirementStatus: fixed.status, timeline, milestones, warnings,
+    fixedRetirementStatus: target && projectedReal && projectedReal.gte(target) ? 'success' : 'notAchievableWithinHorizon', timeline, milestones, warnings,
   }
 }

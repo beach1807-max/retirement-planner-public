@@ -12,6 +12,7 @@ function fixture(): ProjectionInput {
     incomes: [{ id: 'salary', monthlyAmountTwd: '100000', annualGrowthRate: '0', startMonth: '2026-09', endMonth: '2050-09', status: 'provided' }],
     expenses: [{ id: 'living', monthlyAmountTwd: '50000', annualGrowthRate: '0', startMonth: '2026-09', status: 'provided' }],
     liabilities: [{ id: 'loan', balanceTwd: '120000', monthlyPaymentTwd: '10000', status: 'provided' }],
+    retirementBenefits: [],
   }
 }
 
@@ -42,5 +43,14 @@ describe('完整家庭 Projection', () => {
     ]
     const result = await projectRetirement(input)
     expect(result.warnings.filter((item) => item.code === 'INCOME_NOT_PROVIDED').map((item) => item.entityId)).toEqual(['missing'])
+  })
+
+  it('退休制度收入只降低退休後所需目標，不與資產重複相加', async () => {
+    const withoutBenefit = fixture()
+    const withBenefit = fixture()
+    withBenefit.retirementBenefits = [{ id: 'pension', monthlyAmountTwd: '20000', annualGrowthRate: '0', startMonth: '2050-09', status: 'provided' }]
+    const [plain, supported] = await Promise.all([projectRetirement(withoutBenefit), projectRetirement(withBenefit)])
+    expect(Number(supported.retirementTargetAssetsReal)).toBeLessThan(Number(plain.retirementTargetAssetsReal))
+    expect(supported.projectedAssetsAtPlannedReal).toBe(plain.projectedAssetsAtPlannedReal)
   })
 })

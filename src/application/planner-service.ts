@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js'
 import { calculateRetirement } from '../domain/calculation-engine'
 import { projectRetirement } from '../domain/projection-engine'
+import { estimateRetirementSystem, TAIWAN_LABOR_RULES_2026, type RetirementSystemEstimate } from '../domain/retirement-system'
 import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member, ProjectionInput, ProjectionResult } from '../domain/models'
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
@@ -8,6 +9,7 @@ import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
 
 export type DashboardScope = 'household' | 'primary' | 'partner'
 export interface DashboardViewModel { scope: DashboardScope; totalAssetsTwd: string; totalLiabilitiesTwd: string; netWorthTwd: string; assetCount: number; liabilityCount: number; missingDataCount: number; retirementResultScopeLabel: string }
+export interface RetirementSystemView { memberId: string; memberName: string; status: PlannerData['retirementSystems'][number]['status']; laborInsuranceEnabled: boolean; laborPensionEnabled: boolean; estimate: RetirementSystemEstimate | null }
 
 function validateOwnership(item: OwnershipFields, memberIds: Set<string>): void {
   if (item.ownershipType === 'individual') {
@@ -37,6 +39,11 @@ export function validatePlannerData(data: PlannerData): void {
   for (const expense of data.expenses) validateMoney(expense.monthlyAmount)
   for (const liability of data.liabilities) { validateMoney(liability.currentBalance); validateMoney(liability.monthlyPayment) }
   for (const holding of data.holdings) if (!data.accounts.some((account) => account.id === holding.accountId) || !data.assets.some((asset) => asset.id === holding.assetId)) throw new Error('ORPHAN_HOLDING')
+  if (new Set(data.retirementSystems.map((item) => item.memberId)).size !== data.retirementSystems.length) throw new Error('DUPLICATE_RETIREMENT_SYSTEM')
+  for (const item of data.retirementSystems) {
+    if (!memberIds.has(item.memberId)) throw new Error('RETIREMENT_SYSTEM_MEMBER_NOT_FOUND')
+    if (item.status === 'provided' && item.laborPension.enabled && (new Decimal(item.laborPension.voluntaryContributionRate).lt(0) || new Decimal(item.laborPension.voluntaryContributionRate).gt('0.06') || new Decimal(item.laborPension.employerContributionRate).lt('0.06'))) throw new Error('INVALID_LABOR_PENSION_RATE')
+  }
   for (const contribution of data.contributions) {
     if (!/^[A-Z]{3}$/.test(contribution.amount.currency)) throw new Error('INVALID_CURRENCY')
     if (contribution.endRule === 'fixedDate' && (!contribution.endDate || contribution.endDate < contribution.startDate.slice(0, 7))) throw new Error('INVALID_CONTRIBUTION_END_DATE')
@@ -63,14 +70,35 @@ export class PlannerService {
   project(data: PlannerData): Promise<ProjectionResult> {
     const primary = data.members.find((member) => member.id === data.household.primaryMemberId)
     if (!primary?.plannedRetirementMonth) throw new Error('PRIMARY_RETIREMENT_MONTH_REQUIRED')
+    const systemViews = this.retirementSystems(data)
+    const retirementBenefits = systemViews.flatMap((view) => {
+      if (!view.estimate || view.status !== 'provided') return []
+      const benefits = []
+      if (view.laborInsuranceEnabled && view.estimate.laborInsurance.monthlyBenefitRealTwd) benefits.push({ id: `${view.memberId}-labor-insurance`, label: `${view.memberName}勞保`, monthlyAmountTwd: view.estimate.laborInsurance.monthlyBenefitRealTwd, annualGrowthRate: '0', startMonth: view.estimate.laborInsurance.claimMonth, status: 'provided' as const })
+      if (view.laborPensionEnabled && view.estimate.laborPension.monthlyBenefitRealTwd) benefits.push({ id: `${view.memberId}-labor-pension`, label: `${view.memberName}勞退`, monthlyAmountTwd: view.estimate.laborPension.monthlyBenefitRealTwd, annualGrowthRate: '0', startMonth: view.estimate.laborPension.claimMonth, status: 'provided' as const })
+      return benefits
+    })
     const input: ProjectionInput = {
       contractVersion: 'projection-contract-v0.1', baseCalculationInput: toCalculationInputV01(data), plannedRetirementMonth: primary.plannedRetirementMonth,
       incomes: data.incomes.map((item) => ({ id: item.id, label: item.name, monthlyAmountTwd: item.monthlyAmount.amount, annualGrowthRate: item.annualGrowthRate, startMonth: data.calculationBaseDate.slice(0, 7), endMonth: item.incomeType === 'salary' ? data.members.find((member) => member.id === item.ownerMemberId)?.plannedRetirementMonth ?? primary.plannedRetirementMonth : undefined, status: item.monthlyAmount.currency === 'TWD' ? item.status : 'notProvided' })),
       expenses: data.expenses.map((item) => ({ id: item.id, label: item.name, monthlyAmountTwd: item.monthlyAmount.amount, annualGrowthRate: data.assumptions.annualInflationRate, startMonth: data.calculationBaseDate.slice(0, 7), status: item.monthlyAmount.currency === 'TWD' ? item.status : 'notProvided' })),
       liabilities: data.liabilities.map((item) => ({ id: item.id, label: item.name, balanceTwd: item.currentBalance.amount, monthlyPaymentTwd: item.monthlyPayment.amount, status: item.currentBalance.currency === 'TWD' && item.monthlyPayment.currency === 'TWD' ? item.status : 'notProvided' })),
+      retirementBenefits,
     }
     return projectRetirement(input)
   }
+  retirementSystems(data: PlannerData): RetirementSystemView[] {
+    return data.retirementSystems.map((record) => {
+      const member = data.members.find((item) => item.id === record.memberId)
+      if (!member || record.status !== 'provided') return { memberId: record.memberId, memberName: member?.name ?? '未知成員', status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate: null }
+      const estimate = estimateRetirementSystem(
+        { birthDate: member.birthDate, averageInsuredSalaryTwd: record.laborInsurance.averageInsuredSalaryTwd, insuredYears: record.laborInsurance.insuredYears, claimAge: record.laborInsurance.claimAge },
+        { birthDate: member.birthDate, calculationBaseDate: data.calculationBaseDate, currentAccountBalanceTwd: record.laborPension.currentAccountBalanceTwd, contributionYears: record.laborPension.contributionYears, monthlyContributionSalaryTwd: record.laborPension.monthlyContributionSalaryTwd, employerContributionRate: record.laborPension.employerContributionRate, voluntaryContributionRate: record.laborPension.voluntaryContributionRate, projectedAnnualReturnRate: record.laborPension.projectedAnnualReturnRate, annualInflationRate: data.assumptions.annualInflationRate, claimAge: record.laborPension.claimAge },
+      )
+      return { memberId: member.id, memberName: member.name, status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate }
+    })
+  }
+  laborRuleVersion() { return TAIWAN_LABOR_RULES_2026 }
   dashboard(data: PlannerData, scope: DashboardScope): DashboardViewModel {
     const member = data.members.find((item) => item.role === scope)
     const scopedValue = (money: MoneyAmount, item: OwnershipFields) => {
