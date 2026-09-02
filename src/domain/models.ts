@@ -148,3 +148,60 @@ export interface CalculationResult {
   excludedDataSummary: ExcludedDataSummary
 }
 
+export interface ProjectionCashFlow {
+  id: string
+  label?: string
+  monthlyAmountTwd: string
+  annualGrowthRate: string
+  startMonth: string
+  endMonth?: string
+  status: DataStatus
+}
+
+export interface ProjectionLiability {
+  id: string
+  label?: string
+  balanceTwd: string
+  monthlyPaymentTwd: string
+  status: DataStatus
+}
+
+export interface ProjectionInput {
+  contractVersion: 'projection-contract-v0.1'
+  baseCalculationInput: CalculationInput
+  plannedRetirementMonth: string
+  incomes: ProjectionCashFlow[]
+  expenses: ProjectionCashFlow[]
+  liabilities: ProjectionLiability[]
+}
+
+export interface ProjectionTimelineItem {
+  month: string
+  income: string
+  generalExpenses: string
+  liabilityPayments: string
+  explicitContributions: string
+  unallocatedCashFlow: string
+  liabilityBalance: string
+}
+
+export interface ProjectionMilestone {
+  age: number
+  month: string
+  assetsNominal: string | null
+  assetsReal: string | null
+}
+
+export interface ProjectionResult {
+  contractVersion: 'projection-contract-v0.1'
+  plannedRetirementMonth: string
+  projectedAssetsAtPlannedNominal: string | null
+  projectedAssetsAtPlannedReal: string | null
+  retirementTargetAssetsReal: string | null
+  readinessRate: string | null
+  readinessStatus: 'achieved' | 'notAchieved' | 'unavailable'
+  fixedRetirementStatus: CalculationResult['status']
+  timeline: ProjectionTimelineItem[]
+  milestones: ProjectionMilestone[]
+  warnings: CalculationMessage[]
+}

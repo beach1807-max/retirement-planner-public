@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js'
 import { calculateRetirement } from '../domain/calculation-engine'
-import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member } from '../domain/models'
+import { projectRetirement } from '../domain/projection-engine'
+import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member, ProjectionInput, ProjectionResult } from '../domain/models'
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
 import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
@@ -59,6 +60,17 @@ export class PlannerService {
   async save(data: PlannerData): Promise<PlannerData> { validatePlannerData(data); const saved = { ...data, updatedAt: new Date().toISOString() }; await this.repository.save(saved); return saved }
   clear(): Promise<void> { return this.repository.clear() }
   calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
+  project(data: PlannerData): Promise<ProjectionResult> {
+    const primary = data.members.find((member) => member.id === data.household.primaryMemberId)
+    if (!primary?.plannedRetirementMonth) throw new Error('PRIMARY_RETIREMENT_MONTH_REQUIRED')
+    const input: ProjectionInput = {
+      contractVersion: 'projection-contract-v0.1', baseCalculationInput: toCalculationInputV01(data), plannedRetirementMonth: primary.plannedRetirementMonth,
+      incomes: data.incomes.map((item) => ({ id: item.id, label: item.name, monthlyAmountTwd: item.monthlyAmount.amount, annualGrowthRate: item.annualGrowthRate, startMonth: data.calculationBaseDate.slice(0, 7), endMonth: item.incomeType === 'salary' ? data.members.find((member) => member.id === item.ownerMemberId)?.plannedRetirementMonth ?? primary.plannedRetirementMonth : undefined, status: item.monthlyAmount.currency === 'TWD' ? item.status : 'notProvided' })),
+      expenses: data.expenses.map((item) => ({ id: item.id, label: item.name, monthlyAmountTwd: item.monthlyAmount.amount, annualGrowthRate: data.assumptions.annualInflationRate, startMonth: data.calculationBaseDate.slice(0, 7), status: item.monthlyAmount.currency === 'TWD' ? item.status : 'notProvided' })),
+      liabilities: data.liabilities.map((item) => ({ id: item.id, label: item.name, balanceTwd: item.currentBalance.amount, monthlyPaymentTwd: item.monthlyPayment.amount, status: item.currentBalance.currency === 'TWD' && item.monthlyPayment.currency === 'TWD' ? item.status : 'notProvided' })),
+    }
+    return projectRetirement(input)
+  }
   dashboard(data: PlannerData, scope: DashboardScope): DashboardViewModel {
     const member = data.members.find((item) => item.role === scope)
     const scopedValue = (money: MoneyAmount, item: OwnershipFields) => {

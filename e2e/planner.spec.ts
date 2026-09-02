@@ -89,6 +89,31 @@ test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資�
   await expect(page.getByText('尚未建立持有部位資料。')).toBeVisible()
 })
 
+test('Dashboard 顯示退休目標、準備率、淨資產與現金流，個人範圍不改退休結果', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await expect(page.getByText('退休目標資產')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('退休準備率')).toBeVisible()
+  await expect(page.getByText('目前淨資產')).toBeVisible()
+  await expect(page.getByText('家庭每月現金流基線')).toBeVisible()
+  await expect(page.getByText('指定年齡資產節點')).toBeVisible()
+  const retirementHeading = await page.getByRole('heading', { name: /最早約在/ }).textContent()
+  await page.getByRole('button', { name: '主要規劃人', exact: true }).click()
+  await expect(page.getByRole('heading', { name: /最早約在/ })).toHaveText(retirementHeading ?? '')
+  await page.getByRole('button', { name: '名目金額' }).click()
+  await expect(page.getByRole('button', { name: '名目金額' })).toHaveClass(/active/)
+})
+
+test('可保存一次性支出並重新產生預測', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '預測設定' }).click()
+  await page.getByLabel('項目', { exact: true }).fill('整修支出')
+  await page.getByLabel('月份', { exact: true }).fill('2045-06')
+  await page.getByLabel('金額', { exact: true }).fill('500000')
+  await page.getByRole('button', { name: '儲存設定' }).click()
+  await page.getByRole('button', { name: '退休總覽' }).click()
+  await expect(page.getByText('退休目標資產')).toBeVisible({ timeout: 15_000 })
+})
+
 test('備份頁可以下載版本化 JSON', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByRole('button', { name: '備份還原' }).click()

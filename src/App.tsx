@@ -3,7 +3,7 @@ import { ArchiveRestore, ChartNoAxesCombined, Database, House, Settings } from '
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
 import { PlannerService, type DashboardScope } from './application/planner-service'
-import type { CalculationResult } from './domain/models'
+import type { CalculationResult, ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 
@@ -28,6 +28,7 @@ export function App() {
   const [data, setData] = useState<PlannerData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [result, setResult] = useState<CalculationResult | null>(null)
+  const [projection, setProjection] = useState<ProjectionResult | null>(null)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
   const [dashboardScope, setDashboardScope] = useState<DashboardScope>('household')
   const { offlineReady: [offlineReady], needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
@@ -42,15 +43,15 @@ export function App() {
   useEffect(() => {
     if (!data) return
     let active = true
-    plannerService.calculate(data)
-      .then((nextResult) => {
-        if (active) setResult(nextResult)
-      })
+    Promise.all([plannerService.calculate(data), plannerService.project(data)])
+      .then(([nextResult, nextProjection]) => { if (active) { setResult(nextResult); setProjection(nextProjection) } })
+      .catch(() => { if (active) setPersistenceError('無法建立完整家庭預測，請檢查預計退休月份與財務資料。') })
     return () => { active = false }
   }, [data])
 
   async function saveData(next: PlannerData) {
     setResult(null)
+    setProjection(null)
     try {
       const saved = await plannerService.save(next)
       setData(saved)
@@ -122,7 +123,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} onScopeChange={setDashboardScope} result={result} calculating={result === null} />}
+          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} onScopeChange={setDashboardScope} result={result} projection={projection} calculating={result === null || projection === null} />}
           {page === 'data' && <DataPage data={data} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'backup' && (

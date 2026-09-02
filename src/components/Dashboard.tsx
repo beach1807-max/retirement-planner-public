@@ -1,23 +1,26 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Clock3, Info, WalletCards } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PlannerData } from '../application/planner-data'
 import type { DashboardScope, DashboardViewModel } from '../application/planner-service'
-import type { CalculationResult } from '../domain/models'
+import type { CalculationResult, ProjectionResult } from '../domain/models'
 
-interface Props { data: PlannerData; viewModel: DashboardViewModel; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; calculating: boolean }
+interface Props { data: PlannerData; viewModel: DashboardViewModel; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; projection: ProjectionResult | null; calculating: boolean }
 
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 
-export function Dashboard({ data, viewModel, onScopeChange, result, calculating }: Props) {
+export function Dashboard({ data, viewModel, onScopeChange, result, projection, calculating }: Props) {
   const scope = viewModel.scope
+  const [moneyMode, setMoneyMode] = useState<'real' | 'nominal'>('real')
   const partner = data.members.find((member) => member.role === 'partner')
   const chartData = useMemo(() => result?.monthlyTimeline
     .filter((_, index) => index % 12 === 0)
-    .map((item) => ({ month: item.month, assets: Math.round(Number(item.closingAssetsReal)) })) ?? [], [result])
+    .map((item) => ({ month: item.month, assets: Math.round(Number(moneyMode === 'real' ? item.closingAssetsReal : item.closingAssets)) })) ?? [], [result, moneyMode])
   const retirementAge = result?.retirementAgeInMonths == null
     ? null
     : `${Math.floor(result.retirementAgeInMonths / 12)} 歲 ${result.retirementAgeInMonths % 12} 個月`
+  const plannedAssets = projection && (moneyMode === 'real' ? projection.projectedAssetsAtPlannedReal : projection.projectedAssetsAtPlannedNominal)
+  const currentFlow = projection?.timeline[0]
 
   return (
     <div className="page-stack">
@@ -29,6 +32,7 @@ export function Dashboard({ data, viewModel, onScopeChange, result, calculating 
           </button>
         ))}
       </section>
+      <section className="scope-bar" aria-label="金額呈現方式"><span>金額</span><button className={moneyMode === 'real' ? 'active' : ''} onClick={() => setMoneyMode('real')}>今天購買力</button><button className={moneyMode === 'nominal' ? 'active' : ''} onClick={() => setMoneyMode('nominal')}>名目金額</button></section>
 
       {scope !== 'household' && (
         <div className="alert info"><Info size={18} aria-hidden="true" />個人檢視顯示該成員的資產持分；最早退休月份仍依主要規劃人的家庭退休計畫計算。</div>
@@ -54,8 +58,28 @@ export function Dashboard({ data, viewModel, onScopeChange, result, calculating 
         <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>目前查看資產</p><strong>{currency.format(Number(viewModel.totalAssetsTwd))}</strong><small>{viewModel.assetCount} 筆有效資產</small></article>
         <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>目前負債</p><strong>{currency.format(Number(viewModel.totalLiabilitiesTwd))}</strong><small>{viewModel.liabilityCount} 筆有效負債</small></article>
         <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>目前淨資產</p><strong>{currency.format(Number(viewModel.netWorthTwd))}</strong><small>{viewModel.missingDataCount > 0 ? `${viewModel.missingDataCount} 項資料未提供` : '資料完整'}</small></article>
+        <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>退休目標資產</p><strong>{projection?.retirementTargetAssetsReal ? currency.format(Number(projection.retirementTargetAssetsReal)) : '—'}</strong><small>預計退休月份 · 今天購買力</small></article>
+        <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>退休準備率</p><strong>{projection?.readinessStatus === 'achieved' && projection.readinessRate === null ? '已達標' : projection?.readinessRate ? `${projection.readinessRate}%` : '—'}</strong><small>{projection?.plannedRetirementMonth ?? '需設定預計退休月份'}</small></article>
+        <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>預計退休時資產</p><strong>{plannedAssets ? currency.format(Number(plannedAssets)) : '—'}</strong><small>{moneyMode === 'real' ? '今天購買力' : '名目金額'}</small></article>
         <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>退休時預估資產</p><strong>{result?.retirementAssetsAtRetirement ? currency.format(Number(result.retirementAssetsAtRetirement)) : '—'}</strong><small>名目金額</small></article>
         <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>規劃終點剩餘</p><strong>{result?.endingAssetsReal ? currency.format(Number(result.endingAssetsReal)) : '—'}</strong><small>今天購買力</small></article>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading"><div><h3>家庭每月現金流基線</h3><p>收入扣除一般支出、負債還款與明確投入；投入只計入退休資產一次。</p></div><small>{currentFlow?.month ?? '—'}</small></div>
+        <div className="cashflow-grid">
+          <article><span>收入</span><strong>{currentFlow ? currency.format(Number(currentFlow.income)) : '—'}</strong></article>
+          <article><span>一般支出</span><strong>{currentFlow ? currency.format(Number(currentFlow.generalExpenses)) : '—'}</strong></article>
+          <article><span>負債還款</span><strong>{currentFlow ? currency.format(Number(currentFlow.liabilityPayments)) : '—'}</strong></article>
+          <article><span>明確投入</span><strong>{currentFlow ? currency.format(Number(currentFlow.explicitContributions)) : '—'}</strong></article>
+          <article><span>未配置現金流</span><strong>{currentFlow ? currency.format(Number(currentFlow.unallocatedCashFlow)) : '—'}</strong></article>
+          <article><span>負債餘額</span><strong>{currentFlow ? currency.format(Number(currentFlow.liabilityBalance)) : '—'}</strong></article>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading"><div><h3>指定年齡資產節點</h3><p>以固定預計退休月份情境顯示；超出規劃範圍時以「—」表示。</p></div><small>資料更新：{new Date(data.updatedAt).toLocaleString('zh-TW')}</small></div>
+        <div className="milestone-grid">{projection?.milestones.map((item) => <article key={item.age}><span>{item.age} 歲</span><strong>{item.assetsReal ? currency.format(Number(moneyMode === 'real' ? item.assetsReal : item.assetsNominal)) : '—'}</strong><small>{item.month}</small></article>)}</div>
       </section>
 
       <section className="content-grid">
@@ -70,7 +94,7 @@ export function Dashboard({ data, viewModel, onScopeChange, result, calculating 
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
                   <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}萬`} width={60} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(value) => currency.format(Number(value))} labelFormatter={(label) => `${label}`} />
-                  <Line type="monotone" dataKey="assets" name="實質資產" stroke="#1c6b4a" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="assets" name={moneyMode === 'real' ? '實質資產' : '名目資產'} stroke="#1c6b4a" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -82,9 +106,10 @@ export function Dashboard({ data, viewModel, onScopeChange, result, calculating 
           <div className="message-list">
             {result?.errors.map((message) => <div className="message error" key={message.code + message.entityId}><AlertTriangle size={18} /> <span>{message.message}</span></div>)}
             {result?.warnings.map((message) => <div className="message warning" key={message.code + message.entityId}><AlertTriangle size={18} /> <span>{message.message}</span></div>)}
+            {projection?.warnings.map((message) => <div className="message warning" key={`projection-${message.code}-${message.entityId ?? ''}`}><AlertTriangle size={18} /> <span>{message.message}</span></div>)}
             {!result && <p className="muted">尚未完成計算。</p>}
           </div>
-          {result && <div className="trace-summary"><span>納入 {result.includedDataSummary.assetIds.length} 筆資產</span><span>排除 {result.excludedDataSummary.assets.length} 筆資產</span><span>契約 {result.contractVersion}</span></div>}
+          {result && <div className="trace-summary"><span>納入 {result.includedDataSummary.assetIds.length} 筆資產</span><span>排除 {result.excludedDataSummary.assets.length} 筆資產</span><span>契約 {result.contractVersion}</span>{projection && <span>{projection.contractVersion}</span>}</div>}
         </article>
       </section>
     </div>
