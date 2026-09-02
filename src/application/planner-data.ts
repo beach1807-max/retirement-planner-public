@@ -137,8 +137,13 @@ export interface PlannerScenario extends EntityTimestamps {
   }
 }
 
+export interface PlannerInstrument extends EntityTimestamps { id: string; householdId: string; assetId: string; symbol: string; market: 'TWSE'; currency: string }
+export interface PlannerMarketQuote extends EntityTimestamps { id: string; householdId: string; instrumentId: string; symbol: string; price: string; currency: string; asOf: string; sourceId: string; fetchedAt: string }
+export interface PlannerExchangeRate extends EntityTimestamps { id: string; householdId: string; fromCurrency: string; toCurrency: 'TWD'; rate: string; asOf: string; sourceId: string; fetchedAt: string }
+export interface PlannerMarketDataStamp extends EntityTimestamps { id: string; householdId: string; providerId: string; status: 'success' | 'partial' | 'failed'; updatedAssetIds: string[]; errors: string[]; attemptedAt: string; completedAt: string }
+
 export interface PlannerData {
-  schemaVersion: 'planner-data-v0.6'
+  schemaVersion: 'planner-data-v0.7'
   calculationBaseDate: string
   household: PlannerHousehold
   members: PlannerMember[]
@@ -152,6 +157,10 @@ export interface PlannerData {
   retirementSystems: PlannerRetirementSystem[]
   portfolios: PlannerPortfolio[]
   scenarios: PlannerScenario[]
+  instruments: PlannerInstrument[]
+  marketQuotes: PlannerMarketQuote[]
+  exchangeRates: PlannerExchangeRate[]
+  marketDataStamps: PlannerMarketDataStamp[]
   retirementPlan: RetirementPlan
   assumptions: Assumptions
   ruleVersion: 'rules-none-v0.1'
@@ -177,9 +186,9 @@ export function createStarterData(input: StarterDataInput): PlannerData {
   const members: PlannerMember[] = [{ id: primaryId, householdId, name: input.primaryName, role: 'primary', birthDate: input.primaryBirthDate, planningEndAge: input.planningEndAge, plannedRetirementMonth: input.primaryPlannedRetirementMonth, isActive: true, createdAt: timestamp, updatedAt: timestamp }]
   if (input.partnerName && input.partnerBirthDate) members.push({ id: crypto.randomUUID(), householdId, name: input.partnerName, role: 'partner', birthDate: input.partnerBirthDate, planningEndAge: input.planningEndAge, isActive: true, createdAt: timestamp, updatedAt: timestamp })
   return {
-    schemaVersion: 'planner-data-v0.6', calculationBaseDate: input.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.7', calculationBaseDate: input.calculationBaseDate,
     household: { id: householdId, name: input.householdName, baseCurrency: 'TWD', primaryMemberId: primaryId, createdAt: timestamp, updatedAt: timestamp },
-    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [],
+    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [], instruments: [], marketQuotes: [], exchangeRates: [], marketDataStamps: [],
     retirementPlan: { earliestRetirementMonth: input.calculationBaseDate.slice(0, 7), retirementExpenseMonthlyRealTwd: '50000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0', defaultReturnProfileId: 'balanced', oneTimeExpenses: [] },
     assumptions: { annualInflationRate: '0.02', returnProfiles: [{ id: 'cash', name: '現金／保守 1.5%', annualReturnRate: '0.015' }, { id: 'balanced', name: '基準 6%', annualReturnRate: '0.06' }, { id: 'growth', name: '成長 8%', annualReturnRate: '0.08' }] },
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,

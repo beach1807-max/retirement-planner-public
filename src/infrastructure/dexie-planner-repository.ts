@@ -45,6 +45,12 @@ class RetirementPlannerDatabase extends Dexie {
         record.updatedAt = record.data.updatedAt
       })
     })
+    this.version(7).stores({ planner: 'id, updatedAt' }).upgrade(async (transaction) => {
+      await transaction.table('planner').toCollection().modify((record: PlannerRecord) => {
+        record.data = migratePlannerData(record.data)
+        record.updatedAt = record.data.updatedAt
+      })
+    })
   }
 }
 

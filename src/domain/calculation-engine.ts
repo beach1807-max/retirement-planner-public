@@ -146,7 +146,7 @@ function validateInput(input: CalculationInput): CalculationMessage[] {
 function warningsFor(input: CalculationInput): CalculationMessage[] {
   const warnings: CalculationMessage[] = [
     { code: 'FIXED_RETURN_ASSUMPTION', message: '目前使用固定報酬率，尚未納入隨機市場波動。' },
-    { code: 'TAX_AND_FEES_EXCLUDED', message: '本次尚未納入稅務、交易成本與完整退休制度。' },
+    { code: 'TAX_AND_FEES_EXCLUDED', message: '本次尚未納入稅務與交易成本。' },
   ]
   const partner = input.members.find((member) => member.role === 'partner')
   if (partner) {

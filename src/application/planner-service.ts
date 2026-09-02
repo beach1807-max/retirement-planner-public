@@ -39,7 +39,10 @@ export function validatePlannerData(data: PlannerData): void {
   for (const income of data.incomes) validateMoney(income.monthlyAmount)
   for (const expense of data.expenses) validateMoney(expense.monthlyAmount)
   for (const liability of data.liabilities) { validateMoney(liability.currentBalance); validateMoney(liability.monthlyPayment) }
-  for (const holding of data.holdings) if (!data.accounts.some((account) => account.id === holding.accountId) || !data.assets.some((asset) => asset.id === holding.assetId)) throw new Error('ORPHAN_HOLDING')
+  for (const holding of data.holdings) {
+    if (!data.accounts.some((account) => account.id === holding.accountId) || !data.assets.some((asset) => asset.id === holding.assetId)) throw new Error('ORPHAN_HOLDING')
+    if (!new Decimal(holding.quantity).isFinite() || new Decimal(holding.quantity).lt(0)) throw new Error('INVALID_HOLDING_QUANTITY')
+  }
   if (new Set(data.retirementSystems.map((item) => item.memberId)).size !== data.retirementSystems.length) throw new Error('DUPLICATE_RETIREMENT_SYSTEM')
   for (const item of data.retirementSystems) {
     if (!memberIds.has(item.memberId)) throw new Error('RETIREMENT_SYSTEM_MEMBER_NOT_FOUND')
@@ -55,6 +58,12 @@ export function validatePlannerData(data: PlannerData): void {
     if (scenario.overrides.additionalMonthlyContributionTwd && new Decimal(scenario.overrides.additionalMonthlyContributionTwd).lt(0)) throw new Error('INVALID_SCENARIO_CONTRIBUTION')
     if (scenario.overrides.primaryLaborPensionVoluntaryRate && (new Decimal(scenario.overrides.primaryLaborPensionVoluntaryRate).lt(0) || new Decimal(scenario.overrides.primaryLaborPensionVoluntaryRate).gt('.06'))) throw new Error('INVALID_SCENARIO_PENSION_RATE')
   }
+  for (const instrument of data.instruments) {
+    if (!data.assets.some((asset) => asset.id === instrument.assetId) || !/^\d{4,6}[A-Z]?$/.test(instrument.symbol)) throw new Error('INVALID_MARKET_INSTRUMENT')
+    if (data.instruments.some((item) => item.id !== instrument.id && item.assetId === instrument.assetId)) throw new Error('DUPLICATE_ASSET_INSTRUMENT')
+  }
+  for (const quote of data.marketQuotes) if (!data.instruments.some((item) => item.id === quote.instrumentId) || new Decimal(quote.price).lt(0)) throw new Error('INVALID_MARKET_QUOTE')
+  for (const rate of data.exchangeRates) if (rate.toCurrency !== 'TWD' || new Decimal(rate.rate).lte(0)) throw new Error('INVALID_EXCHANGE_RATE')
   for (const contribution of data.contributions) {
     if (!/^[A-Z]{3}$/.test(contribution.amount.currency)) throw new Error('INVALID_CURRENCY')
     if (contribution.endRule === 'fixedDate' && (!contribution.endDate || contribution.endDate < contribution.startDate.slice(0, 7))) throw new Error('INVALID_CONTRIBUTION_END_DATE')

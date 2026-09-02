@@ -22,6 +22,7 @@ export function Dashboard({ data, viewModel, systemEstimates, portfolio, onScope
     : `${Math.floor(result.retirementAgeInMonths / 12)} 歲 ${result.retirementAgeInMonths % 12} 個月`
   const plannedAssets = projection && (moneyMode === 'real' ? projection.projectedAssetsAtPlannedReal : projection.projectedAssetsAtPlannedNominal)
   const currentFlow = projection?.timeline[0]
+  const lastMarketUpdate = data.marketDataStamps.filter((item) => item.status !== 'failed').at(-1)
 
   return (
     <div className="page-stack">
@@ -40,6 +41,7 @@ export function Dashboard({ data, viewModel, systemEstimates, portfolio, onScope
       )}
 
       <div className="alert info"><Info size={18} aria-hidden="true" />退休結果固定代表「{viewModel.retirementResultScopeLabel}」。</div>
+      <div className="alert info"><Info size={18} aria-hidden="true" />行情資料：{lastMarketUpdate ? `最後成功／部分成功 ${new Date(lastMarketUpdate.completedAt).toLocaleString('zh-TW')}` : '尚未手動更新；目前使用使用者輸入市值。'}</div>
 
       <section className="hero-result">
         <div>

@@ -166,6 +166,27 @@ test('可建立、比較與刪除不修改正式資料的情境', async ({ page 
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toHaveCount(0)
 })
 
+test('可手動更新官方行情與匯率並同步重算資產', async ({ page }) => {
+  await page.route('**/api/market-data?*', async (route) => route.fulfill({ json: {
+    quotes: [{ symbol: '0050', price: '70', currency: 'TWD', asOf: '2026-09-02', sourceId: 'twse-openapi-v1' }],
+    rates: [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: '31.666', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }, { fromCurrency: 'JPY', toCurrency: 'TWD', rate: '0.1984', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }, { fromCurrency: 'EUR', toCurrency: 'TWD', rate: '36.744', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }],
+    errors: [], fetchedAt: '2026-09-03T00:00:00Z',
+  } }))
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '行情更新' }).click()
+  const firstAsset = page.locator('fieldset').filter({ hasText: '退休投資帳戶' })
+  await firstAsset.getByLabel('上市代碼').fill('0050')
+  await firstAsset.getByLabel('持有數量').fill('1000')
+  await page.getByRole('button', { name: '儲存標的設定' }).click()
+  await page.getByRole('button', { name: '更新股票、ETF 與匯率' }).click()
+  await expect(page.getByText('行情與匯率更新完成。')).toBeVisible()
+  await expect(page.getByText('70 TWD')).toBeVisible()
+  await expect(page.getByText('31.6660')).toBeVisible()
+  await page.getByRole('button', { name: '退休總覽' }).click()
+  await expect(page.getByText(/最後成功／部分成功/)).toBeVisible()
+  await expect(page.locator('.metric-card').filter({ hasText: '目前查看資產' })).toContainText('$1,070,000')
+})
+
 test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
