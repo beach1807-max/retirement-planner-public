@@ -16,7 +16,7 @@ describe('IndexedDB Repository', () => {
     expect(await repository.load()).toBeNull()
   })
 
-  it('開啟 v1 IndexedDB 時會在升級 transaction 中遷移為 v0.2', async () => {
+  it('開啟 v1 IndexedDB 時會在升級 transaction 中遷移為目前版本', async () => {
     const databaseName = `retirement-planner-migration-${crypto.randomUUID()}`
     const original = createDemoData('2026-09-01')
     const legacy = {
@@ -31,7 +31,7 @@ describe('IndexedDB Repository', () => {
     await v1.table('planner').put({ id: 'current', data: legacy, updatedAt: legacy.updatedAt })
     v1.close()
     const upgraded = await new DexiePlannerRepository(databaseName).load()
-    expect((upgraded as { schemaVersion: string }).schemaVersion).toBe('planner-data-v0.2')
+    expect((upgraded as { schemaVersion: string }).schemaVersion).toBe('planner-data-v0.3')
     expect((upgraded as { assets: Array<{ currentValue: unknown }> }).assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     await Dexie.delete(databaseName)
   })

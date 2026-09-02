@@ -124,6 +124,13 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
 .member-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .member-card { display: flex; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
 .member-card p { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
+.member-editor { align-items: flex-start; }
+.member-editor > div { display: grid; gap: 8px; width: 100%; }
+.member-editor label { font-size: .78rem; }
+.member-editor input { margin-top: 3px; padding: 9px 10px; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.finance-group { margin-top: 22px; }
+.finance-group > h3 { margin: 0 0 8px; font-size: .95rem; }
 .avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #e2efe7; color: var(--primary); font-weight: 800; }
 .data-list { display: grid; }
 .data-list > article { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px 44px; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }

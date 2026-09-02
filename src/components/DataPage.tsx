@@ -2,6 +2,7 @@ import Decimal from 'decimal.js'
 import { useState, type FormEvent } from 'react'
 import { Pencil, Plus, Trash2, Users, WalletCards } from 'lucide-react'
 import type { PlannerAsset, PlannerContribution, PlannerData } from '../application/planner-data'
+import { FinancialDataSections } from './FinancialDataSections'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -50,6 +51,8 @@ export function DataPage({ data, onChange }: Props) {
       currentValue: { amount: String(form.get('currentValue')), currency: 'TWD' }, includeInTotalAssets: form.get('includeInTotalAssets') === 'on',
       retirementUsageScope: String(form.get('retirementUsageScope')) as PlannerAsset['retirementUsageScope'], availableFrom: String(form.get('availableFrom')),
       returnProfileId: String(form.get('returnProfileId')) || undefined, status: String(form.get('status')) as PlannerAsset['status'],
+      accountId: String(form.get('accountId')) || undefined, region: String(form.get('region')) as PlannerAsset['region'] || undefined,
+      riskLevel: String(form.get('riskLevel')) as PlannerAsset['riskLevel'] || undefined, propertyAddress: String(form.get('propertyAddress')) || undefined,
       createdAt: editedAsset?.createdAt ?? now, updatedAt: now,
     }
     void onChange({ ...data, assets: editedAsset ? data.assets.map((item) => item.id === asset.id ? asset : item) : [...data.assets, asset] })
@@ -96,7 +99,7 @@ export function DataPage({ data, onChange }: Props) {
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
         <div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
-          <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="stockEtf">股票／ETF</option><option value="other">其他</option></select></label>
+          <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="stockEtf">股票／ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
           <label>目前價值（TWD）<input name="currentValue" type="number" required min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /></label>
           <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>
@@ -105,10 +108,14 @@ export function DataPage({ data, onChange }: Props) {
           <label>退休使用範圍<select name="retirementUsageScope" defaultValue={editedAsset?.retirementUsageScope}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入退休</option></select></label>
           <label>可動用日期<input name="availableFrom" type="date" required defaultValue={editedAsset?.availableFrom ?? data.calculationBaseDate} /></label>
           <label>報酬設定<select name="returnProfileId" defaultValue={editedAsset?.returnProfileId}>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+          <label>所屬帳戶<select name="accountId" defaultValue={editedAsset?.accountId}><option value="">未指定</option>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <label>地區<select name="region" defaultValue={editedAsset?.region}><option value="">未指定</option><option value="taiwan">臺灣</option><option value="global">全球</option><option value="us">美國</option><option value="other">其他</option></select></label>
+          <label>風險分類<select name="riskLevel" defaultValue={editedAsset?.riskLevel}><option value="">未指定</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+          <label>不動產地址（選填）<input name="propertyAddress" defaultValue={editedAsset?.propertyAddress} /></label>
           <label className="checkbox-row"><input name="includeInTotalAssets" type="checkbox" defaultChecked={editedAsset?.includeInTotalAssets ?? true} /><span>納入總資產</span></label>
         </div>{error && <div className="field-error" role="alert">{error}</div>}<div className="form-actions"><button className="button ghost" type="button" onClick={() => setAssetEditor(null)}>取消</button><button className="button primary" type="submit">儲存資產</button></div>
       </form>}
-      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{currency.format(Number(asset.currentValue.amount))}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id) })}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
+      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{currency.format(Number(asset.currentValue.amount))}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id), holdings: data.holdings.filter((item) => item.assetId !== asset.id) })}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
     </section>
 
     <section className="panel">
@@ -128,5 +135,6 @@ export function DataPage({ data, onChange }: Props) {
       </form>}
       <div className="data-list">{data.contributions.map((contribution) => { const member = data.members.find((item) => item.id === contribution.sourceMemberId); const asset = data.assets.find((item) => item.id === contribution.destinationAssetId); const profile = data.assumptions.returnProfiles.find((item) => item.id === contribution.returnProfileId); return <article key={contribution.id}><div><strong>{member?.name} 每月投入</strong><p>投向 {asset?.name ?? profile?.name} · {contribution.endRule === 'fixedDate' ? `${contribution.endDate} 停止` : contribution.endRule === 'ownerRetirement' ? '本人退休時停止' : contribution.endRule === 'primaryRetirement' ? '主要規劃人退休時停止' : '持續至規劃終點'}</p></div><strong>{currency.format(Number(contribution.amount.amount))}</strong><button className="icon-button" aria-label="編輯每月投入" onClick={() => editContribution(contribution)}><Pencil size={18} /></button><button className="icon-button danger" aria-label="刪除每月投入" onClick={() => void onChange({ ...data, contributions: data.contributions.filter((item) => item.id !== contribution.id) })}><Trash2 size={18} /></button></article> })}{data.contributions.length === 0 && <div className="empty-state">目前沒有每月投入；這不會阻止使用現有資產進行試算。</div>}</div>
     </section>
+    <FinancialDataSections data={data} onChange={onChange} />
   </div>
 }

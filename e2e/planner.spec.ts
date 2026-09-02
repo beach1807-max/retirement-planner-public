@@ -61,6 +61,34 @@ test('共同持分須為 100%，並可建立固定日期與報酬設定投入', 
   await expect(page.getByText(/2030-12 停止/)).toBeVisible()
 })
 
+test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資料', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '收入', exact: true }).click()
+  await page.getByLabel('名稱').fill('固定兼職收入')
+  await page.getByLabel('每月金額（TWD）').fill('12000')
+  await page.getByRole('button', { name: '儲存收入' }).click()
+  const income = page.locator('article').filter({ hasText: '固定兼職收入' })
+  await expect(income).toContainText('$12,000')
+  await income.getByRole('button', { name: '編輯收入' }).click()
+  await page.getByLabel('每月金額（TWD）').fill('15000')
+  await page.getByRole('button', { name: '儲存收入' }).click()
+  await expect(page.locator('article').filter({ hasText: '固定兼職收入' })).toContainText('$15,000')
+  await page.locator('article').filter({ hasText: '固定兼職收入' }).getByRole('button', { name: '刪除收入' }).click()
+  await expect(page.getByText('固定兼職收入')).toHaveCount(0)
+
+  await page.getByRole('button', { name: '帳戶', exact: true }).click()
+  await page.getByLabel('名稱').fill('測試證券帳戶')
+  await page.getByLabel('帳戶類型').selectOption('brokerage')
+  await page.getByRole('button', { name: '儲存帳戶' }).click()
+  await page.getByRole('button', { name: '持有部位', exact: true }).click()
+  await page.getByLabel('持有數量').fill('10')
+  await page.getByRole('button', { name: '儲存持有部位' }).click()
+  await expect(page.getByText(/測試證券帳戶－退休投資帳戶/)).toBeVisible()
+  await page.locator('article').filter({ hasText: '測試證券帳戶' }).getByRole('button', { name: '刪除帳戶' }).click()
+  await expect(page.getByText('尚未建立持有部位資料。')).toBeVisible()
+})
+
 test('備份頁可以下載版本化 JSON', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByRole('button', { name: '備份還原' }).click()
@@ -74,6 +102,9 @@ test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true })
+  await page.getByRole('button', { name: '家庭資料' }).click()
+  await expect(page.getByRole('heading', { name: '家庭成員' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('financial-data.png'), fullPage: true })
 })
 
 test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => {

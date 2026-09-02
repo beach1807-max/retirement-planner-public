@@ -23,7 +23,7 @@ describe('Planner Service 與遷移', () => {
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
-    expect(migrated.schemaVersion).toBe('planner-data-v0.2')
+    expect(migrated.schemaVersion).toBe('planner-data-v0.3')
     expect(migrated.assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     expect(migrated.assets[0].createdAt).toBe(legacy.updatedAt)
     const legacyInput = { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${legacy.household.id}`, calculationBaseDate: legacy.calculationBaseDate, household: legacy.household, members: legacy.members, assets: legacy.assets, contributions: legacy.contributions, retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions, ruleVersion: 'rules-none-v0.1' } as CalculationInput
@@ -52,5 +52,28 @@ describe('Planner Service 與遷移', () => {
     const data = createDemoData('2026-09-01')
     data.assets[0].currentValue.currency = 'USD'
     expect(() => toCalculationInputV01(data)).toThrow('FX_RATE_REQUIRED')
+  })
+
+  it('家庭與個人淨資產依持分計算，未提供與明確 0 狀態不同', () => {
+    const data = createDemoData('2026-09-01')
+    const primary = data.members[0]
+    const timestamp = data.updatedAt
+    data.assets = [{ ...data.assets[0], ownershipType: 'joint', ownerMemberId: undefined, owners: [{ memberId: primary.id, share: '0.75' }, { memberId: data.members[1].id, share: '0.25' }] }]
+    data.liabilities = [
+      { id: 'loan', householdId: data.household.id, name: '共同貸款', liabilityType: 'personalLoan', currentBalance: { amount: '1000000', currency: 'TWD' }, monthlyPayment: { amount: '0', currency: 'TWD' }, ownershipType: 'joint', owners: [{ memberId: primary.id, share: '0.6' }, { memberId: data.members[1].id, share: '0.4' }], status: 'provided', createdAt: timestamp, updatedAt: timestamp },
+      { id: 'zero-loan', householdId: data.household.id, name: '已清償', liabilityType: 'other', currentBalance: { amount: '0', currency: 'TWD' }, monthlyPayment: { amount: '0', currency: 'TWD' }, ownershipType: 'individual', ownerMemberId: primary.id, status: 'provided', createdAt: timestamp, updatedAt: timestamp },
+    ]
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    expect(service.dashboard(data, 'household').netWorthTwd).toBe('4000000.00')
+    expect(service.dashboard(data, 'primary').netWorthTwd).toBe('3150000.00')
+    expect(service.dashboard(data, 'primary').missingDataCount).toBe(1)
+  })
+
+  it('孤兒 Holding 會被拒絕，且收入不會自動變成 Contribution', () => {
+    const data = createDemoData('2026-09-01')
+    data.holdings = [{ id: 'holding', householdId: data.household.id, accountId: 'missing', assetId: data.assets[0].id, quantity: '1', status: 'provided', createdAt: data.updatedAt, updatedAt: data.updatedAt }]
+    expect(() => validatePlannerData(data)).toThrow('ORPHAN_HOLDING')
+    data.holdings = []
+    expect(toCalculationInputV01(data).contributions).toHaveLength(data.contributions.length)
   })
 })

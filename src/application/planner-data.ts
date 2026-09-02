@@ -5,20 +5,27 @@ export interface EntityTimestamps { createdAt: string; updatedAt: string }
 export type PlannerHousehold = Household & EntityTimestamps
 export type PlannerMember = Member & EntityTimestamps
 
-export interface PlannerAsset extends EntityTimestamps {
-  id: string
-  householdId: string
-  name: string
-  assetType: Asset['assetType']
+export interface OwnershipFields {
   ownershipType: OwnershipType
   ownerMemberId?: string
   owners?: Asset['owners']
+}
+
+export interface PlannerAsset extends EntityTimestamps, OwnershipFields {
+  id: string
+  householdId: string
+  name: string
+  assetType: 'cash' | 'stockEtf' | 'bond' | 'fund' | 'insurance' | 'property' | 'retirementAccount' | 'other'
   currentValue: MoneyAmount
   includeInTotalAssets: boolean
   retirementUsageScope: RetirementUsageScope
   availableFrom: string
   returnProfileId?: string
   status: DataStatus
+  accountId?: string
+  region?: 'taiwan' | 'global' | 'us' | 'other'
+  riskLevel?: 'low' | 'medium' | 'high'
+  propertyAddress?: string
 }
 
 export interface PlannerContribution extends EntityTimestamps {
@@ -35,13 +42,64 @@ export interface PlannerContribution extends EntityTimestamps {
   status: DataStatus
 }
 
+export interface PlannerAccount extends EntityTimestamps, OwnershipFields {
+  id: string
+  householdId: string
+  name: string
+  institution?: string
+  accountType: 'cash' | 'bank' | 'brokerage' | 'insurance' | 'property' | 'retirement' | 'other'
+  status: DataStatus
+}
+
+export interface PlannerHolding extends EntityTimestamps {
+  id: string
+  householdId: string
+  accountId: string
+  assetId: string
+  quantity: string
+  status: DataStatus
+}
+
+export interface PlannerIncome extends EntityTimestamps, OwnershipFields {
+  id: string
+  householdId: string
+  name: string
+  incomeType: 'salary' | 'otherFixed'
+  monthlyAmount: MoneyAmount
+  annualGrowthRate: string
+  status: DataStatus
+}
+
+export interface PlannerExpense extends EntityTimestamps, OwnershipFields {
+  id: string
+  householdId: string
+  name: string
+  monthlyAmount: MoneyAmount
+  status: DataStatus
+}
+
+export interface PlannerLiability extends EntityTimestamps, OwnershipFields {
+  id: string
+  householdId: string
+  name: string
+  liabilityType: 'mortgage' | 'personalLoan' | 'carLoan' | 'other'
+  currentBalance: MoneyAmount
+  monthlyPayment: MoneyAmount
+  status: DataStatus
+}
+
 export interface PlannerData {
-  schemaVersion: 'planner-data-v0.2'
+  schemaVersion: 'planner-data-v0.3'
   calculationBaseDate: string
   household: PlannerHousehold
   members: PlannerMember[]
   assets: PlannerAsset[]
   contributions: PlannerContribution[]
+  accounts: PlannerAccount[]
+  holdings: PlannerHolding[]
+  incomes: PlannerIncome[]
+  expenses: PlannerExpense[]
+  liabilities: PlannerLiability[]
   retirementPlan: RetirementPlan
   assumptions: Assumptions
   ruleVersion: 'rules-none-v0.1'
@@ -67,9 +125,9 @@ export function createStarterData(input: StarterDataInput): PlannerData {
   const members: PlannerMember[] = [{ id: primaryId, householdId, name: input.primaryName, role: 'primary', birthDate: input.primaryBirthDate, planningEndAge: input.planningEndAge, plannedRetirementMonth: input.primaryPlannedRetirementMonth, isActive: true, createdAt: timestamp, updatedAt: timestamp }]
   if (input.partnerName && input.partnerBirthDate) members.push({ id: crypto.randomUUID(), householdId, name: input.partnerName, role: 'partner', birthDate: input.partnerBirthDate, planningEndAge: input.planningEndAge, isActive: true, createdAt: timestamp, updatedAt: timestamp })
   return {
-    schemaVersion: 'planner-data-v0.2', calculationBaseDate: input.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.3', calculationBaseDate: input.calculationBaseDate,
     household: { id: householdId, name: input.householdName, baseCurrency: 'TWD', primaryMemberId: primaryId, createdAt: timestamp, updatedAt: timestamp },
-    members, assets: [], contributions: [],
+    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [],
     retirementPlan: { earliestRetirementMonth: input.calculationBaseDate.slice(0, 7), retirementExpenseMonthlyRealTwd: '50000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0', defaultReturnProfileId: 'balanced', oneTimeExpenses: [] },
     assumptions: { annualInflationRate: '0.02', returnProfiles: [{ id: 'cash', name: '現金／保守 1.5%', annualReturnRate: '0.015' }, { id: 'balanced', name: '基準 6%', annualReturnRate: '0.06' }, { id: 'growth', name: '成長 8%', annualReturnRate: '0.08' }] },
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,
@@ -89,5 +147,11 @@ export function createDemoData(calculationBaseDate: string): PlannerData {
     { id: crypto.randomUUID(), householdId: data.household.id, sourceMemberId: primary.id, amount: { amount: '30000', currency: 'TWD' }, usageScope: 'household', startDate: calculationBaseDate, endRule: 'ownerRetirement', destinationAssetId: data.assets[0].id, status: 'provided', ...timestamps },
     { id: crypto.randomUUID(), householdId: data.household.id, sourceMemberId: partner.id, amount: { amount: '10000', currency: 'TWD' }, usageScope: 'household', startDate: calculationBaseDate, endRule: 'primaryRetirement', destinationAssetId: data.assets[1].id, status: 'provided', ...timestamps },
   ]
+  data.incomes = [
+    { id: crypto.randomUUID(), householdId: data.household.id, name: '主要薪資', incomeType: 'salary', monthlyAmount: { amount: '80000', currency: 'TWD' }, annualGrowthRate: '0.02', ownershipType: 'individual', ownerMemberId: primary.id, status: 'provided', ...timestamps },
+    { id: crypto.randomUUID(), householdId: data.household.id, name: '伴侶薪資', incomeType: 'salary', monthlyAmount: { amount: '60000', currency: 'TWD' }, annualGrowthRate: '0.02', ownershipType: 'individual', ownerMemberId: partner.id, status: 'notProvided', ...timestamps },
+  ]
+  data.expenses = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '家庭平均生活支出', monthlyAmount: { amount: '60000', currency: 'TWD' }, ownershipType: 'household', status: 'provided', ...timestamps }]
+  data.liabilities = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '房貸', liabilityType: 'mortgage', currentBalance: { amount: '2000000', currency: 'TWD' }, monthlyPayment: { amount: '25000', currency: 'TWD' }, ownershipType: 'household', status: 'provided', ...timestamps }]
   return data
 }

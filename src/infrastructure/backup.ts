@@ -15,15 +15,29 @@ const common = {
 }
 const v01DataSchema = z.object({ schemaVersion: z.literal('planner-data-v0.1'), ...common, household: z.object({ id: z.string(), name: z.string(), baseCurrency: z.literal('TWD'), primaryMemberId: z.string() }), members: z.array(memberSchema.omit({ createdAt: true, updatedAt: true })), assets: z.array(z.object({ ...assetBase, currentValueTwd: z.string() })), contributions: z.array(z.object({ ...contributionBase, amountTwd: z.string() })) })
 const v02DataSchema = z.object({ schemaVersion: z.literal('planner-data-v0.2'), ...common, household: z.object({ id: z.string(), name: z.string(), baseCurrency: z.literal('TWD'), primaryMemberId: z.string(), ...timestamp }), members: z.array(memberSchema), assets: z.array(z.object({ ...assetBase, currentValue: z.object({ amount: z.string(), currency: z.string().regex(/^[A-Z]{3}$/) }), ...timestamp })), contributions: z.array(z.object({ ...contributionBase, amount: z.object({ amount: z.string(), currency: z.string().regex(/^[A-Z]{3}$/) }), ...timestamp })), ruleVersion: z.literal('rules-none-v0.1'), retirementMode: z.literal('support-to-plan-end-v0.1') })
+const moneySchema = z.object({ amount: z.string(), currency: z.string().regex(/^[A-Z]{3}$/) })
+const ownershipSchema = { ownershipType: z.enum(['individual', 'joint', 'household']), ownerMemberId: z.string().optional(), owners: z.array(z.object({ memberId: z.string(), share: z.string() })).optional() }
+const v03AssetBase = { ...assetBase, assetType: z.enum(['cash', 'stockEtf', 'bond', 'fund', 'insurance', 'property', 'retirementAccount', 'other']), accountId: z.string().optional(), region: z.enum(['taiwan', 'global', 'us', 'other']).optional(), riskLevel: z.enum(['low', 'medium', 'high']).optional(), propertyAddress: z.string().optional() }
+const v03DataSchema = z.object({
+  schemaVersion: z.literal('planner-data-v0.3'), ...common,
+  household: z.object({ id: z.string(), name: z.string(), baseCurrency: z.literal('TWD'), primaryMemberId: z.string(), ...timestamp }), members: z.array(memberSchema),
+  assets: z.array(z.object({ ...v03AssetBase, currentValue: moneySchema, ...timestamp })), contributions: z.array(z.object({ ...contributionBase, amount: moneySchema, ...timestamp })),
+  accounts: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), institution: z.string().optional(), accountType: z.enum(['cash', 'bank', 'brokerage', 'insurance', 'property', 'retirement', 'other']), status: z.enum(['provided', 'notProvided', 'notApplicable']), ...ownershipSchema, ...timestamp })),
+  holdings: z.array(z.object({ id: z.string(), householdId: z.string(), accountId: z.string(), assetId: z.string(), quantity: z.string(), status: z.enum(['provided', 'notProvided', 'notApplicable']), ...timestamp })),
+  incomes: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), incomeType: z.enum(['salary', 'otherFixed']), monthlyAmount: moneySchema, annualGrowthRate: z.string(), status: z.enum(['provided', 'notProvided', 'notApplicable']), ...ownershipSchema, ...timestamp })),
+  expenses: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), monthlyAmount: moneySchema, status: z.enum(['provided', 'notProvided', 'notApplicable']), ...ownershipSchema, ...timestamp })),
+  liabilities: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), liabilityType: z.enum(['mortgage', 'personalLoan', 'carLoan', 'other']), currentBalance: moneySchema, monthlyPayment: moneySchema, status: z.enum(['provided', 'notProvided', 'notApplicable']), ...ownershipSchema, ...timestamp })),
+  ruleVersion: z.literal('rules-none-v0.1'), retirementMode: z.literal('support-to-plan-end-v0.1'),
+})
 
 export function serializeBackup(data: PlannerData): string {
-  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.2', exportedAt: new Date().toISOString(), data }, null, 2)
+  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.3', exportedAt: new Date().toISOString(), data }, null, 2)
 }
 
 export function parseBackup(value: string): PlannerData {
   const parsed = JSON.parse(value) as { backupVersion?: string; data?: unknown }
-  if (parsed.backupVersion !== 'retirement-planner-backup-v0.1' && parsed.backupVersion !== 'retirement-planner-backup-v0.2') throw new Error('UNSUPPORTED_BACKUP_VERSION')
-  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : v02DataSchema.parse(parsed.data)
+  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
+  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : v03DataSchema.parse(parsed.data)
   const migrated = migratePlannerData(source)
   validatePlannerData(migrated)
   return migrated

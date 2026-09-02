@@ -7,6 +7,8 @@ import { parseBackup, serializeBackup } from './backup'
 describe('JSON 備份', () => {
   it('匯出後可還原相同資料', () => {
     const original = createDemoData('2026-09-01')
+    original.accounts = [{ id: 'account-1', householdId: original.household.id, name: '證券帳戶', accountType: 'brokerage', ownershipType: 'individual', ownerMemberId: original.members[0].id, status: 'provided', createdAt: original.updatedAt, updatedAt: original.updatedAt }]
+    original.holdings = [{ id: 'holding-1', householdId: original.household.id, accountId: 'account-1', assetId: original.assets[0].id, quantity: '10', status: 'provided', createdAt: original.updatedAt, updatedAt: original.updatedAt }]
     expect(parseBackup(serializeBackup(original))).toEqual(original)
   })
 
@@ -14,7 +16,7 @@ describe('JSON 備份', () => {
     expect(() => parseBackup('{"backupVersion":"unknown","data":{}}')).toThrow()
   })
 
-  it('可匯入 v0.1 備份並遷移為 v0.2', () => {
+  it('可匯入 v0.1 備份並遷移為目前版本', () => {
     const original = createDemoData('2026-09-01')
     const data = {
       ...original, schemaVersion: 'planner-data-v0.1', ruleVersion: undefined, retirementMode: undefined,
@@ -24,7 +26,7 @@ describe('JSON 備份', () => {
       contributions: original.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.amount, usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status })),
     }
     const restored = parseBackup(JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.1', exportedAt: original.updatedAt, data }))
-    expect(restored.schemaVersion).toBe('planner-data-v0.2')
+    expect(restored.schemaVersion).toBe('planner-data-v0.3')
     expect(restored.household.createdAt).toBe(original.updatedAt)
   })
 

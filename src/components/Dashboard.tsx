@@ -52,6 +52,8 @@ export function Dashboard({ data, viewModel, onScopeChange, result, calculating 
 
       <section className="metric-grid">
         <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>目前查看資產</p><strong>{currency.format(Number(viewModel.totalAssetsTwd))}</strong><small>{viewModel.assetCount} 筆有效資產</small></article>
+        <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>目前負債</p><strong>{currency.format(Number(viewModel.totalLiabilitiesTwd))}</strong><small>{viewModel.liabilityCount} 筆有效負債</small></article>
+        <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>目前淨資產</p><strong>{currency.format(Number(viewModel.netWorthTwd))}</strong><small>{viewModel.missingDataCount > 0 ? `${viewModel.missingDataCount} 項資料未提供` : '資料完整'}</small></article>
         <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>退休時預估資產</p><strong>{result?.retirementAssetsAtRetirement ? currency.format(Number(result.retirementAssetsAtRetirement)) : '—'}</strong><small>名目金額</small></article>
         <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>規劃終點剩餘</p><strong>{result?.endingAssetsReal ? currency.format(Number(result.endingAssetsReal)) : '—'}</strong><small>今天購買力</small></article>
       </section>
