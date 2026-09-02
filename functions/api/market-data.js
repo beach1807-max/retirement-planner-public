@@ -1,5 +1,5 @@
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
-const CBC_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=BP01D01'
+const CBC_URL = 'https://cpx.cbc.gov.tw/api/OpenData/FTDOpenData_Day'
 
 const isoTwseDate = (value) => `${Number(value.slice(0, 3)) + 1911}-${value.slice(3, 5)}-${value.slice(5, 7)}`
 const isoCbcDate = (value) => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
@@ -20,19 +20,11 @@ export async function onRequestGet(context) {
   try {
     const response = await fetch(CBC_URL, { headers: { Accept: 'application/json' } })
     if (!response.ok) throw new Error(`CBC ${response.status}`)
-    const body = await response.json()
-    const rows = body.data.dataSets
+    const rows = await response.json()
     const row = rows[rows.length - 1]
-    const ntdPerUsd = Number(row[1])
-    const specs = [
-      ['USD', 1, 'direct'], ['JPY', 2, 'divide'], ['GBP', 3, 'multiply'], ['HKD', 4, 'divide'], ['KRW', 5, 'divide'], ['CAD', 6, 'divide'], ['SGD', 7, 'divide'], ['CNY', 8, 'divide'], ['AUD', 9, 'multiply'], ['IDR', 10, 'divide'], ['THB', 11, 'divide'], ['MYR', 12, 'divide'], ['PHP', 13, 'divide'], ['EUR', 14, 'multiply'], ['VND', 18, 'divide'],
-    ]
-    rates = specs.flatMap(([currency, index, mode]) => {
-      const raw = Number(row[index])
-      if (!Number.isFinite(raw)) return []
-      const rate = mode === 'direct' ? ntdPerUsd : mode === 'multiply' ? ntdPerUsd * raw : ntdPerUsd / raw
-      return [{ fromCurrency: currency, toCurrency: 'TWD', rate: String(rate), asOf: isoCbcDate(row[0]), sourceId: 'cbc-bp01d01' }]
-    })
+    const rate = Number(row.NTD_USD)
+    if (!Number.isFinite(rate)) throw new Error('CBC invalid rate')
+    rates = [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: String(rate), asOf: isoCbcDate(row['日期']), sourceId: 'cbc-ftd-day' }]
   } catch { errors.push({ message: '中央銀行匯率暫時無法取得。' }) }
   return Response.json({ quotes, rates, errors, fetchedAt }, { headers: { 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } })
 }
