@@ -1,36 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Clock3, Info, WalletCards } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PlannerData } from '../application/planner-data'
+import type { DashboardScope, DashboardViewModel } from '../application/planner-service'
 import type { CalculationResult } from '../domain/models'
 
-interface Props { data: PlannerData; result: CalculationResult | null; calculating: boolean }
-type Scope = 'household' | 'primary' | 'partner'
+interface Props { data: PlannerData; viewModel: DashboardViewModel; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; calculating: boolean }
 
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 
-function scopedAssets(data: PlannerData, scope: Scope) {
-  if (scope === 'household') return data.assets.filter((asset) => asset.includeInTotalAssets && asset.status === 'provided')
-  const member = data.members.find((item) => item.role === scope)
-  if (!member) return []
-  return data.assets.filter((asset) => {
-    if (!asset.includeInTotalAssets || asset.status !== 'provided') return false
-    if (asset.ownershipType === 'individual') return asset.ownerMemberId === member.id
-    if (asset.ownershipType === 'joint') return asset.owners?.some((owner) => owner.memberId === member.id)
-    return false
-  })
-}
-
-export function Dashboard({ data, result, calculating }: Props) {
-  const [scope, setScope] = useState<Scope>('household')
+export function Dashboard({ data, viewModel, onScopeChange, result, calculating }: Props) {
+  const scope = viewModel.scope
   const partner = data.members.find((member) => member.role === 'partner')
-  const assets = scopedAssets(data, scope)
-  const totalAssets = assets.reduce((sum, asset) => {
-    if (scope === 'household' || asset.ownershipType !== 'joint') return sum + Number(asset.currentValueTwd)
-    const member = data.members.find((item) => item.role === scope)
-    const share = asset.owners?.find((owner) => owner.memberId === member?.id)?.share ?? '0'
-    return sum + Number(asset.currentValueTwd) * Number(share)
-  }, 0)
   const chartData = useMemo(() => result?.monthlyTimeline
     .filter((_, index) => index % 12 === 0)
     .map((item) => ({ month: item.month, assets: Math.round(Number(item.closingAssetsReal)) })) ?? [], [result])
@@ -42,8 +23,8 @@ export function Dashboard({ data, result, calculating }: Props) {
     <div className="page-stack">
       <section className="scope-bar" aria-label="查看範圍">
         <span>查看範圍</span>
-        {(['household', 'primary', ...(partner ? ['partner'] : [])] as Scope[]).map((item) => (
-          <button key={item} className={scope === item ? 'active' : ''} onClick={() => setScope(item)}>
+        {(['household', 'primary', ...(partner ? ['partner'] : [])] as DashboardScope[]).map((item) => (
+          <button key={item} className={scope === item ? 'active' : ''} onClick={() => onScopeChange(item)}>
             {item === 'household' ? '家庭' : item === 'primary' ? '主要規劃人' : '伴侶'}
           </button>
         ))}
@@ -52,6 +33,8 @@ export function Dashboard({ data, result, calculating }: Props) {
       {scope !== 'household' && (
         <div className="alert info"><Info size={18} aria-hidden="true" />個人檢視顯示該成員的資產持分；最早退休月份仍依主要規劃人的家庭退休計畫計算。</div>
       )}
+
+      <div className="alert info"><Info size={18} aria-hidden="true" />退休結果固定代表「{viewModel.retirementResultScopeLabel}」。</div>
 
       <section className="hero-result">
         <div>
@@ -68,7 +51,7 @@ export function Dashboard({ data, result, calculating }: Props) {
       </section>
 
       <section className="metric-grid">
-        <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>目前查看資產</p><strong>{currency.format(totalAssets)}</strong><small>{assets.length} 筆有效資產</small></article>
+        <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>目前查看資產</p><strong>{currency.format(Number(viewModel.totalAssetsTwd))}</strong><small>{viewModel.assetCount} 筆有效資產</small></article>
         <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>退休時預估資產</p><strong>{result?.retirementAssetsAtRetirement ? currency.format(Number(result.retirementAssetsAtRetirement)) : '—'}</strong><small>名目金額</small></article>
         <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>規劃終點剩餘</p><strong>{result?.endingAssetsReal ? currency.format(Number(result.endingAssetsReal)) : '—'}</strong><small>今天購買力</small></article>
       </section>

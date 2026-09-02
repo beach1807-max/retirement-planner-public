@@ -16,6 +16,7 @@ export function Onboarding({ onCreate, onLoadDemo }: Props) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const primaryBirthDate = String(form.get('primaryBirthDate') ?? '')
+    const primaryPlannedRetirementMonth = String(form.get('primaryPlannedRetirementMonth') ?? '')
     const partnerBirthDate = String(form.get('partnerBirthDate') ?? '')
     if (primaryBirthDate > today || (includePartner && partnerBirthDate > today)) {
       setError('出生日期不可晚於今天。')
@@ -25,6 +26,7 @@ export function Onboarding({ onCreate, onLoadDemo }: Props) {
       householdName: String(form.get('householdName')),
       primaryName: String(form.get('primaryName')),
       primaryBirthDate,
+      primaryPlannedRetirementMonth,
       planningEndAge: Number(form.get('planningEndAge')),
       partnerName: includePartner ? String(form.get('partnerName')) : undefined,
       partnerBirthDate: includePartner ? partnerBirthDate : undefined,
@@ -56,6 +58,7 @@ export function Onboarding({ onCreate, onLoadDemo }: Props) {
           <div className="form-grid two">
             <label>主要規劃人名稱<input name="primaryName" required autoComplete="name" /></label>
             <label>出生日期<input name="primaryBirthDate" type="date" required max={today} /></label>
+            <label>預計退休月份<input name="primaryPlannedRetirementMonth" type="month" required min={today.slice(0, 7)} defaultValue={`${Number(today.slice(0, 4)) + 24}-${today.slice(5, 7)}`} /></label>
           </div>
           <label>希望規劃到幾歲<input name="planningEndAge" type="number" required min="70" max="120" defaultValue="90" /></label>
           <label className="checkbox-row">
@@ -76,4 +79,3 @@ export function Onboarding({ onCreate, onLoadDemo }: Props) {
     </main>
   )
 }
-

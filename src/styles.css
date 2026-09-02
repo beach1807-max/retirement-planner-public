@@ -126,7 +126,7 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
 .member-card p { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
 .avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #e2efe7; color: var(--primary); font-weight: 800; }
 .data-list { display: grid; }
-.data-list > article { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(118px, auto) 44px; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+.data-list > article { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px 44px; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
 .compact-select { min-height: 40px; padding: 6px 9px; font-size: .82rem; }
 .data-list > article:first-child { border-top: 0; }
 .data-list p { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
@@ -179,9 +179,11 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
   .scope-bar button { flex: 1 0 auto; }
   .hero-result > svg { display: none; }
   .chart-wrap { height: 280px; }
-  .data-list > article { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
+  .data-list > article { grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 8px; }
   .data-list > article > strong, .data-list > article > .compact-select { grid-column: 1; }
-  .data-list > article .icon-button { grid-column: 2; grid-row: 1 / span 3; }
+  .data-list > article .icon-button { grid-row: 1 / span 2; }
+  .data-list > article .icon-button[aria-label^="編輯"] { grid-column: 2; }
+  .data-list > article .icon-button[aria-label^="刪除"] { grid-column: 3; }
   .onboarding-shell { display: block; }
   .onboarding-intro { min-height: 410px; padding: 38px 22px 70px; }
   .onboarding-card { margin: -35px auto 24px; position: relative; }

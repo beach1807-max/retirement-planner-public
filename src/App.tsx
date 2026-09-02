@@ -2,14 +2,15 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ArchiveRestore, ChartNoAxesCombined, Database, House, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
-import { calculateRetirement } from './domain/calculation-engine'
-import type { CalculationInput, CalculationResult } from './domain/models'
+import { PlannerService, type DashboardScope } from './application/planner-service'
+import type { CalculationResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 
 type Page = 'dashboard' | 'data' | 'settings' | 'backup'
 
 const repository = new DexiePlannerRepository()
+const plannerService = new PlannerService(repository)
 const Dashboard = lazy(() => import('./components/Dashboard').then((module) => ({ default: module.Dashboard })))
 const DataPage = lazy(() => import('./components/DataPage').then((module) => ({ default: module.DataPage })))
 const SettingsPage = lazy(() => import('./components/SettingsPage').then((module) => ({ default: module.SettingsPage })))
@@ -22,31 +23,17 @@ const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'backup', label: '備份還原', icon: ArchiveRestore },
 ]
 
-function calculationInput(data: PlannerData): CalculationInput {
-  return {
-    contractVersion: 'calculation-contract-v0.1',
-    calculationId: `calculation-${data.household.id}`,
-    calculationBaseDate: data.calculationBaseDate,
-    household: data.household,
-    members: data.members,
-    assets: data.assets,
-    contributions: data.contributions,
-    retirementPlan: data.retirementPlan,
-    assumptions: data.assumptions,
-    ruleVersion: 'rules-none-v0.1',
-  }
-}
-
 export function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [data, setData] = useState<PlannerData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [result, setResult] = useState<CalculationResult | null>(null)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
+  const [dashboardScope, setDashboardScope] = useState<DashboardScope>('household')
   const { offlineReady: [offlineReady], needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
 
   useEffect(() => {
-    repository.load()
+    plannerService.load()
       .then(setData)
       .catch(() => setPersistenceError('無法讀取瀏覽器本機資料庫。'))
       .finally(() => setLoaded(true))
@@ -55,7 +42,7 @@ export function App() {
   useEffect(() => {
     if (!data) return
     let active = true
-    calculateRetirement(calculationInput(data))
+    plannerService.calculate(data)
       .then((nextResult) => {
         if (active) setResult(nextResult)
       })
@@ -63,14 +50,13 @@ export function App() {
   }, [data])
 
   async function saveData(next: PlannerData) {
-    const saved = { ...next, updatedAt: new Date().toISOString() }
     setResult(null)
-    setData(saved)
     try {
-      await repository.save(saved)
+      const saved = await plannerService.save(next)
+      setData(saved)
       setPersistenceError(null)
-    } catch {
-      setPersistenceError('資料已更新在畫面中，但無法寫入瀏覽器本機資料庫。請立即匯出備份。')
+    } catch (error) {
+      setPersistenceError(error instanceof Error && error.message.startsWith('INVALID_') ? '資料欄位或關聯無效，尚未儲存。請檢查輸入。' : '無法寫入瀏覽器本機資料庫。請立即匯出備份。')
     }
   }
 
@@ -136,7 +122,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} result={result} calculating={result === null} />}
+          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} onScopeChange={setDashboardScope} result={result} calculating={result === null} />}
           {page === 'data' && <DataPage data={data} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'backup' && (
@@ -144,7 +130,7 @@ export function App() {
               data={data}
               onRestore={saveData}
               onClear={async () => {
-                await repository.clear()
+                await plannerService.clear()
                 setData(null)
                 setPage('dashboard')
               }}

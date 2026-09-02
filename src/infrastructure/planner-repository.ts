@@ -1,8 +1,7 @@
 import type { PlannerData } from '../application/planner-data'
 
 export interface PlannerRepository {
-  load(): Promise<PlannerData | null>
+  load(): Promise<PlannerData | unknown | null>
   save(data: PlannerData): Promise<void>
   clear(): Promise<void>
 }
-

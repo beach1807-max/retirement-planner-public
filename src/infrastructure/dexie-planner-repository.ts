@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { PlannerData } from '../application/planner-data'
+import { migratePlannerData } from '../application/planner-migration'
 import type { PlannerRepository } from './planner-repository'
 
 interface PlannerRecord {
@@ -11,16 +12,26 @@ interface PlannerRecord {
 class RetirementPlannerDatabase extends Dexie {
   planner!: EntityTable<PlannerRecord, 'id'>
 
-  constructor() {
-    super('retirement-planner-pwa')
+  constructor(databaseName = 'retirement-planner-pwa') {
+    super(databaseName)
     this.version(1).stores({ planner: 'id, updatedAt' })
+    this.version(2).stores({ planner: 'id, updatedAt' }).upgrade(async (transaction) => {
+      await transaction.table('planner').toCollection().modify((record: PlannerRecord) => {
+        record.data = migratePlannerData(record.data)
+        record.updatedAt = record.data.updatedAt
+      })
+    })
   }
 }
 
 export class DexiePlannerRepository implements PlannerRepository {
-  private readonly database = new RetirementPlannerDatabase()
+  private readonly database: RetirementPlannerDatabase
 
-  async load(): Promise<PlannerData | null> {
+  constructor(databaseName = 'retirement-planner-pwa') {
+    this.database = new RetirementPlannerDatabase(databaseName)
+  }
+
+  async load(): Promise<PlannerData | unknown | null> {
     return (await this.database.planner.get('current'))?.data ?? null
   }
 
@@ -32,4 +43,3 @@ export class DexiePlannerRepository implements PlannerRepository {
     await this.database.planner.clear()
   }
 }
-
