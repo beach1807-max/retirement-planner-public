@@ -50,6 +50,11 @@ export function validatePlannerData(data: PlannerData): void {
     if (new Set(portfolio.assetIds).size !== portfolio.assetIds.length || portfolio.assetIds.some((id) => !data.assets.some((asset) => asset.id === id))) throw new Error('PORTFOLIO_ASSET_NOT_FOUND')
     calculateRebalancing({ allocations: [], targets: portfolio.targets, driftThreshold: portfolio.driftThreshold })
   }
+  for (const scenario of data.scenarios) {
+    if (scenario.householdId !== data.household.id || scenario.version !== 'scenario-v0.1') throw new Error('INVALID_SCENARIO')
+    if (scenario.overrides.additionalMonthlyContributionTwd && new Decimal(scenario.overrides.additionalMonthlyContributionTwd).lt(0)) throw new Error('INVALID_SCENARIO_CONTRIBUTION')
+    if (scenario.overrides.primaryLaborPensionVoluntaryRate && (new Decimal(scenario.overrides.primaryLaborPensionVoluntaryRate).lt(0) || new Decimal(scenario.overrides.primaryLaborPensionVoluntaryRate).gt('.06'))) throw new Error('INVALID_SCENARIO_PENSION_RATE')
+  }
   for (const contribution of data.contributions) {
     if (!/^[A-Z]{3}$/.test(contribution.amount.currency)) throw new Error('INVALID_CURRENCY')
     if (contribution.endRule === 'fixedDate' && (!contribution.endDate || contribution.endDate < contribution.startDate.slice(0, 7))) throw new Error('INVALID_CONTRIBUTION_END_DATE')

@@ -122,8 +122,23 @@ export interface PlannerPortfolio extends EntityTimestamps {
   driftThreshold: string
 }
 
+export interface PlannerScenario extends EntityTimestamps {
+  id: string
+  householdId: string
+  name: string
+  version: 'scenario-v0.1'
+  baseDataUpdatedAt: string
+  contractVersion: 'calculation-contract-v0.1'
+  ruleVersion: 'tw-labor-rules-2026-08-20'
+  overrides: {
+    plannedRetirementMonth?: string
+    additionalMonthlyContributionTwd?: string
+    primaryLaborPensionVoluntaryRate?: string
+  }
+}
+
 export interface PlannerData {
-  schemaVersion: 'planner-data-v0.5'
+  schemaVersion: 'planner-data-v0.6'
   calculationBaseDate: string
   household: PlannerHousehold
   members: PlannerMember[]
@@ -136,6 +151,7 @@ export interface PlannerData {
   liabilities: PlannerLiability[]
   retirementSystems: PlannerRetirementSystem[]
   portfolios: PlannerPortfolio[]
+  scenarios: PlannerScenario[]
   retirementPlan: RetirementPlan
   assumptions: Assumptions
   ruleVersion: 'rules-none-v0.1'
@@ -161,9 +177,9 @@ export function createStarterData(input: StarterDataInput): PlannerData {
   const members: PlannerMember[] = [{ id: primaryId, householdId, name: input.primaryName, role: 'primary', birthDate: input.primaryBirthDate, planningEndAge: input.planningEndAge, plannedRetirementMonth: input.primaryPlannedRetirementMonth, isActive: true, createdAt: timestamp, updatedAt: timestamp }]
   if (input.partnerName && input.partnerBirthDate) members.push({ id: crypto.randomUUID(), householdId, name: input.partnerName, role: 'partner', birthDate: input.partnerBirthDate, planningEndAge: input.planningEndAge, isActive: true, createdAt: timestamp, updatedAt: timestamp })
   return {
-    schemaVersion: 'planner-data-v0.5', calculationBaseDate: input.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.6', calculationBaseDate: input.calculationBaseDate,
     household: { id: householdId, name: input.householdName, baseCurrency: 'TWD', primaryMemberId: primaryId, createdAt: timestamp, updatedAt: timestamp },
-    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [],
+    members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [],
     retirementPlan: { earliestRetirementMonth: input.calculationBaseDate.slice(0, 7), retirementExpenseMonthlyRealTwd: '50000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0', defaultReturnProfileId: 'balanced', oneTimeExpenses: [] },
     assumptions: { annualInflationRate: '0.02', returnProfiles: [{ id: 'cash', name: '現金／保守 1.5%', annualReturnRate: '0.015' }, { id: 'balanced', name: '基準 6%', annualReturnRate: '0.06' }, { id: 'growth', name: '成長 8%', annualReturnRate: '0.08' }] },
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,
@@ -191,5 +207,10 @@ export function createDemoData(calculationBaseDate: string): PlannerData {
   data.liabilities = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '房貸', liabilityType: 'mortgage', currentBalance: { amount: '2000000', currency: 'TWD' }, monthlyPayment: { amount: '25000', currency: 'TWD' }, ownershipType: 'household', status: 'provided', ...timestamps }]
   data.retirementSystems = data.members.map((member) => ({ id: crypto.randomUUID(), householdId: data.household.id, memberId: member.id, ruleVersion: 'tw-labor-rules-2026-08-20', status: member.role === 'primary' ? 'provided' : 'notProvided', laborInsurance: { enabled: member.role === 'primary', averageInsuredSalaryTwd: member.role === 'primary' ? '45800' : '0', insuredYears: member.role === 'primary' ? '28' : '0', claimAge: 65 }, laborPension: { enabled: member.role === 'primary', currentAccountBalanceTwd: member.role === 'primary' ? '1200000' : '0', contributionYears: member.role === 'primary' ? '15' : '0', monthlyContributionSalaryTwd: member.role === 'primary' ? '45800' : '0', employerContributionRate: '0.06', voluntaryContributionRate: '0', projectedAnnualReturnRate: '0.02', claimAge: 60 }, ...timestamps }))
   data.portfolios = [{ id: crypto.randomUUID(), householdId: data.household.id, name: '家庭可投資資產', scope: 'household', assetIds: data.assets.filter((asset) => asset.assetType === 'stockEtf').map((asset) => asset.id), targets: [{ assetClass: 'stockEtf', targetWeight: '0.7' }, { assetClass: 'bond', targetWeight: '0.2' }, { assetClass: 'cash', targetWeight: '0.1' }], driftThreshold: '0.05', ...timestamps }]
+  data.scenarios = [
+    { id: crypto.randomUUID(), householdId: data.household.id, name: '提早兩年退休', version: 'scenario-v0.1', baseDataUpdatedAt: data.updatedAt, contractVersion: 'calculation-contract-v0.1', ruleVersion: 'tw-labor-rules-2026-08-20', overrides: { plannedRetirementMonth: `${retirementYear - 2}-09` }, ...timestamps },
+    { id: crypto.randomUUID(), householdId: data.household.id, name: '每月增加投入 10,000', version: 'scenario-v0.1', baseDataUpdatedAt: data.updatedAt, contractVersion: 'calculation-contract-v0.1', ruleVersion: 'tw-labor-rules-2026-08-20', overrides: { additionalMonthlyContributionTwd: '10000' }, ...timestamps },
+    { id: crypto.randomUUID(), householdId: data.household.id, name: '勞退自提 6%', version: 'scenario-v0.1', baseDataUpdatedAt: data.updatedAt, contractVersion: 'calculation-contract-v0.1', ruleVersion: 'tw-labor-rules-2026-08-20', overrides: { primaryLaborPensionVoluntaryRate: '0.06' }, ...timestamps },
+  ]
   return data
 }

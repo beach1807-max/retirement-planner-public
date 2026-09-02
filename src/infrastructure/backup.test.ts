@@ -26,7 +26,7 @@ describe('JSON 備份', () => {
       contributions: original.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.amount, usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status })),
     }
     const restored = parseBackup(JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.1', exportedAt: original.updatedAt, data }))
-    expect(restored.schemaVersion).toBe('planner-data-v0.5')
+    expect(restored.schemaVersion).toBe('planner-data-v0.6')
     expect(restored.household.createdAt).toBe(original.updatedAt)
   })
 

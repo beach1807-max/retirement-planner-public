@@ -1,21 +1,24 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { ArchiveRestore, ChartNoAxesCombined, Database, House, PieChart, Scale, Settings } from 'lucide-react'
+import { ArchiveRestore, ChartNoAxesCombined, Database, FlaskConical, House, PieChart, Scale, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
 import { PlannerService, type DashboardScope } from './application/planner-service'
+import { ScenarioService } from './application/scenario-service'
 import type { CalculationResult, ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 
-type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'settings' | 'backup'
+type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'scenarios' | 'settings' | 'backup'
 
 const repository = new DexiePlannerRepository()
 const plannerService = new PlannerService(repository)
+const scenarioService = new ScenarioService(plannerService)
 const Dashboard = lazy(() => import('./components/Dashboard').then((module) => ({ default: module.Dashboard })))
 const DataPage = lazy(() => import('./components/DataPage').then((module) => ({ default: module.DataPage })))
 const SettingsPage = lazy(() => import('./components/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const RetirementSystemsPage = lazy(() => import('./components/RetirementSystemsPage').then((module) => ({ default: module.RetirementSystemsPage })))
 const PortfolioPage = lazy(() => import('./components/PortfolioPage').then((module) => ({ default: module.PortfolioPage })))
+const ScenarioPage = lazy(() => import('./components/ScenarioPage').then((module) => ({ default: module.ScenarioPage })))
 const BackupPage = lazy(() => import('./components/BackupPage').then((module) => ({ default: module.BackupPage })))
 
 const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
@@ -23,6 +26,7 @@ const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'data', label: '家庭資料', icon: Database },
   { id: 'retirementSystems', label: '退休制度', icon: Scale },
   { id: 'portfolio', label: '投資組合', icon: PieChart },
+  { id: 'scenarios', label: '情境比較', icon: FlaskConical },
   { id: 'settings', label: '預測設定', icon: Settings },
   { id: 'backup', label: '備份還原', icon: ArchiveRestore },
 ]
@@ -132,6 +136,7 @@ export function App() {
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}
           {page === 'portfolio' && <PortfolioPage data={data} result={plannerService.portfolio(data)} onChange={saveData} />}
+          {page === 'scenarios' && <ScenarioPage data={data} service={scenarioService} onChange={saveData} />}
           {page === 'backup' && (
             <BackupPage
               data={data}

@@ -151,6 +151,21 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '投資組合與再平衡' })).toBeVisible()
 })
 
+test('可建立、比較與刪除不修改正式資料的情境', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '情境比較' }).click()
+  await expect(page.getByRole('row', { name: /基準方案/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('row', { name: /勞退自提 6%/ })).toBeVisible()
+  await page.getByLabel('情境名稱').fill('額外投入測試')
+  await page.getByLabel('每月額外投入（TWD）').fill('5000')
+  await page.getByLabel('每月額外投入（TWD）').press('Enter')
+  await expect(page.getByRole('row', { name: /額外投入測試/ })).toBeVisible({ timeout: 15_000 })
+  const deleteScenario = page.getByRole('button', { name: '刪除情境 額外投入測試' })
+  await deleteScenario.focus()
+  await deleteScenario.press('Enter')
+  await expect(page.getByRole('row', { name: /額外投入測試/ })).toHaveCount(0)
+})
+
 test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
