@@ -2,6 +2,7 @@ import Decimal from 'decimal.js'
 import { calculateRetirement } from '../domain/calculation-engine'
 import { projectRetirement } from '../domain/projection-engine'
 import { estimateRetirementSystem, TAIWAN_LABOR_RULES_2026, type RetirementSystemEstimate } from '../domain/retirement-system'
+import { calculateRebalancing, type RebalancingResult } from '../domain/rebalancing-engine'
 import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member, ProjectionInput, ProjectionResult } from '../domain/models'
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
@@ -43,6 +44,11 @@ export function validatePlannerData(data: PlannerData): void {
   for (const item of data.retirementSystems) {
     if (!memberIds.has(item.memberId)) throw new Error('RETIREMENT_SYSTEM_MEMBER_NOT_FOUND')
     if (item.status === 'provided' && item.laborPension.enabled && (new Decimal(item.laborPension.voluntaryContributionRate).lt(0) || new Decimal(item.laborPension.voluntaryContributionRate).gt('0.06') || new Decimal(item.laborPension.employerContributionRate).lt('0.06'))) throw new Error('INVALID_LABOR_PENSION_RATE')
+  }
+  for (const portfolio of data.portfolios) {
+    if (portfolio.scope !== 'household' || portfolio.householdId !== data.household.id) throw new Error('INVALID_PORTFOLIO_SCOPE')
+    if (new Set(portfolio.assetIds).size !== portfolio.assetIds.length || portfolio.assetIds.some((id) => !data.assets.some((asset) => asset.id === id))) throw new Error('PORTFOLIO_ASSET_NOT_FOUND')
+    calculateRebalancing({ allocations: [], targets: portfolio.targets, driftThreshold: portfolio.driftThreshold })
   }
   for (const contribution of data.contributions) {
     if (!/^[A-Z]{3}$/.test(contribution.amount.currency)) throw new Error('INVALID_CURRENCY')
@@ -99,6 +105,16 @@ export class PlannerService {
     })
   }
   laborRuleVersion() { return TAIWAN_LABOR_RULES_2026 }
+  portfolio(data: PlannerData, portfolioId?: string): RebalancingResult | null {
+    const portfolio = portfolioId ? data.portfolios.find((item) => item.id === portfolioId) : data.portfolios[0]
+    if (!portfolio) return null
+    const allocations = portfolio.assetIds.flatMap((id) => {
+      const asset = data.assets.find((item) => item.id === id)
+      if (!asset || asset.status !== 'provided' || asset.currentValue.currency !== 'TWD') return []
+      return [{ assetClass: asset.assetType, valueTwd: asset.currentValue.amount }]
+    })
+    return calculateRebalancing({ allocations, targets: portfolio.targets, driftThreshold: portfolio.driftThreshold })
+  }
   dashboard(data: PlannerData, scope: DashboardScope): DashboardViewModel {
     const member = data.members.find((item) => item.role === scope)
     const scopedValue = (money: MoneyAmount, item: OwnershipFields) => {

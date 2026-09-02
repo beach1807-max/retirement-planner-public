@@ -23,7 +23,7 @@ describe('Planner Service 與遷移', () => {
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
-    expect(migrated.schemaVersion).toBe('planner-data-v0.4')
+    expect(migrated.schemaVersion).toBe('planner-data-v0.5')
     expect(migrated.assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     expect(migrated.assets[0].createdAt).toBe(legacy.updatedAt)
     const legacyInput = { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${legacy.household.id}`, calculationBaseDate: legacy.calculationBaseDate, household: legacy.household, members: legacy.members, assets: legacy.assets, contributions: legacy.contributions, retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions, ruleVersion: 'rules-none-v0.1' } as CalculationInput
@@ -75,5 +75,15 @@ describe('Planner Service 與遷移', () => {
     expect(() => validatePlannerData(data)).toThrow('ORPHAN_HOLDING')
     data.holdings = []
     expect(toCalculationInputV01(data).contributions).toHaveLength(data.contributions.length)
+  })
+
+  it('投資組合只計入明確納入的家庭資產且共同資產不重複', () => {
+    const data = createDemoData('2026-09-01')
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    const result = service.portfolio(data)
+    expect(result?.totalValueTwd).toBe('6000000.00')
+    expect(result?.allocations.find((item) => item.assetClass === 'stockEtf')?.currentWeight).toBe('1.000000')
+    data.assets.push({ ...data.assets[0], id: 'house', name: '自住房', assetType: 'property', currentValue: { amount: '20000000', currency: 'TWD' } })
+    expect(service.portfolio(data)?.totalValueTwd).toBe('6000000.00')
   })
 })

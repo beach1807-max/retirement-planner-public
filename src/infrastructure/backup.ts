@@ -38,15 +38,19 @@ const v04DataSchema = v03DataSchema.omit({ schemaVersion: true }).extend({
     ...timestamp,
   })),
 })
+const v05DataSchema = v04DataSchema.omit({ schemaVersion: true }).extend({
+  schemaVersion: z.literal('planner-data-v0.5'),
+  portfolios: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), scope: z.literal('household'), assetIds: z.array(z.string()), targets: z.array(z.object({ assetClass: z.enum(['cash', 'stockEtf', 'bond', 'fund', 'insurance', 'property', 'retirementAccount', 'other']), targetWeight: z.string() })), driftThreshold: z.string(), ...timestamp })),
+})
 
 export function serializeBackup(data: PlannerData): string {
-  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.4', exportedAt: new Date().toISOString(), data }, null, 2)
+  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.5', exportedAt: new Date().toISOString(), data }, null, 2)
 }
 
 export function parseBackup(value: string): PlannerData {
   const parsed = JSON.parse(value) as { backupVersion?: string; data?: unknown }
-  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
-  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : v04DataSchema.parse(parsed.data)
+  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
+  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : v05DataSchema.parse(parsed.data)
   const migrated = migratePlannerData(source)
   validatePlannerData(migrated)
   return migrated

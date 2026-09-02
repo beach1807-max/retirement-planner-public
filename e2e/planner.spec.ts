@@ -136,6 +136,21 @@ test('備份頁可以下載版本化 JSON', async ({ page }) => {
   expect(download.suggestedFilename()).toMatch(/^退休規劃備份_\d{4}-\d{2}-\d{2}\.json$/)
 })
 
+test('可設定投資組合並檢視配置偏離', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '投資組合' }).click()
+  await expect(page.getByRole('heading', { name: /投資組合與再平衡/ })).toBeVisible()
+  await expect(page.getByText(/偏離 30.0 個百分點/)).toBeVisible()
+  await page.getByLabel('股票／ETF（%）').fill('100')
+  await page.getByLabel('債券（%）').fill('0')
+  await page.getByLabel('現金（%）').fill('0')
+  await page.getByRole('button', { name: '儲存投資組合' }).click()
+  await expect(page.getByText('投資組合設定已儲存並重新計算。')).toBeVisible()
+  await expect(page.getByText('所有配置均在允許偏離範圍內。')).toBeVisible()
+  await page.getByRole('button', { name: '退休總覽' }).click()
+  await expect(page.getByRole('heading', { name: '投資組合與再平衡' })).toBeVisible()
+})
+
 test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })

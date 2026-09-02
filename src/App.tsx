@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { ArchiveRestore, ChartNoAxesCombined, Database, House, Scale, Settings } from 'lucide-react'
+import { ArchiveRestore, ChartNoAxesCombined, Database, House, PieChart, Scale, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
 import { PlannerService, type DashboardScope } from './application/planner-service'
@@ -7,7 +7,7 @@ import type { CalculationResult, ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 
-type Page = 'dashboard' | 'data' | 'retirementSystems' | 'settings' | 'backup'
+type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'settings' | 'backup'
 
 const repository = new DexiePlannerRepository()
 const plannerService = new PlannerService(repository)
@@ -15,12 +15,14 @@ const Dashboard = lazy(() => import('./components/Dashboard').then((module) => (
 const DataPage = lazy(() => import('./components/DataPage').then((module) => ({ default: module.DataPage })))
 const SettingsPage = lazy(() => import('./components/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const RetirementSystemsPage = lazy(() => import('./components/RetirementSystemsPage').then((module) => ({ default: module.RetirementSystemsPage })))
+const PortfolioPage = lazy(() => import('./components/PortfolioPage').then((module) => ({ default: module.PortfolioPage })))
 const BackupPage = lazy(() => import('./components/BackupPage').then((module) => ({ default: module.BackupPage })))
 
 const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'dashboard', label: '退休總覽', icon: ChartNoAxesCombined },
   { id: 'data', label: '家庭資料', icon: Database },
   { id: 'retirementSystems', label: '退休制度', icon: Scale },
+  { id: 'portfolio', label: '投資組合', icon: PieChart },
   { id: 'settings', label: '預測設定', icon: Settings },
   { id: 'backup', label: '備份還原', icon: ArchiveRestore },
 ]
@@ -125,10 +127,11 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} systemEstimates={plannerService.retirementSystems(data)} onScopeChange={setDashboardScope} result={result} projection={projection} calculating={result === null || projection === null} />}
+          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} onScopeChange={setDashboardScope} result={result} projection={projection} calculating={result === null || projection === null} />}
           {page === 'data' && <DataPage data={data} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}
+          {page === 'portfolio' && <PortfolioPage data={data} result={plannerService.portfolio(data)} onChange={saveData} />}
           {page === 'backup' && (
             <BackupPage
               data={data}

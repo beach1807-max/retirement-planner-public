@@ -4,12 +4,13 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import type { PlannerData } from '../application/planner-data'
 import type { DashboardScope, DashboardViewModel, RetirementSystemView } from '../application/planner-service'
 import type { CalculationResult, ProjectionResult } from '../domain/models'
+import type { RebalancingResult } from '../domain/rebalancing-engine'
 
-interface Props { data: PlannerData; viewModel: DashboardViewModel; systemEstimates: RetirementSystemView[]; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; projection: ProjectionResult | null; calculating: boolean }
+interface Props { data: PlannerData; viewModel: DashboardViewModel; systemEstimates: RetirementSystemView[]; portfolio: RebalancingResult | null; onScopeChange: (scope: DashboardScope) => void; result: CalculationResult | null; projection: ProjectionResult | null; calculating: boolean }
 
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 
-export function Dashboard({ data, viewModel, systemEstimates, onScopeChange, result, projection, calculating }: Props) {
+export function Dashboard({ data, viewModel, systemEstimates, portfolio, onScopeChange, result, projection, calculating }: Props) {
   const scope = viewModel.scope
   const [moneyMode, setMoneyMode] = useState<'real' | 'nominal'>('real')
   const partner = data.members.find((member) => member.role === 'partner')
@@ -63,6 +64,12 @@ export function Dashboard({ data, viewModel, systemEstimates, onScopeChange, res
         <article className="metric-card"><span className="metric-icon"><WalletCards size={21} /></span><p>預計退休時資產</p><strong>{plannedAssets ? currency.format(Number(plannedAssets)) : '—'}</strong><small>{moneyMode === 'real' ? '今天購買力' : '名目金額'}</small></article>
         <article className="metric-card"><span className="metric-icon"><CircleDollarSign size={21} /></span><p>退休時預估資產</p><strong>{result?.retirementAssetsAtRetirement ? currency.format(Number(result.retirementAssetsAtRetirement)) : '—'}</strong><small>名目金額</small></article>
         <article className="metric-card"><span className="metric-icon"><CheckCircle2 size={21} /></span><p>規劃終點剩餘</p><strong>{result?.endingAssetsReal ? currency.format(Number(result.endingAssetsReal)) : '—'}</strong><small>今天購買力</small></article>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading"><div><h3>投資組合與再平衡</h3><p>家庭可投資資產的目前配置與目標偏離。</p></div><small>{portfolio?.status === 'balanced' ? '配置正常' : portfolio?.status === 'reviewNeeded' ? '建議檢視' : '尚未設定'}</small></div>
+        {portfolio?.allocations.length ? <div className="cashflow-grid">{portfolio.allocations.map((item) => <article key={item.assetClass}><span>{item.assetClass}</span><strong>{(Number(item.currentWeight) * 100).toFixed(1)}%</strong><small>目標 {(Number(item.targetWeight) * 100).toFixed(1)}%</small></article>)}</div> : <p className="muted">請至投資組合設定納入範圍與目標。</p>}
+        {portfolio?.warnings.map((warning) => <div className="message warning" key={warning}><AlertTriangle size={18} />{warning}</div>)}
       </section>
 
       <section className="panel">
