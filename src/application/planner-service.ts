@@ -86,8 +86,8 @@ export class PlannerService {
   async load(): Promise<PlannerData | null> { const stored = await this.repository.load(); if (!stored) return null; const migrated = migratePlannerData(stored); validatePlannerData(migrated); if (stored !== migrated) await this.repository.save(migrated); return migrated }
   async save(data: PlannerData): Promise<PlannerData> { validatePlannerData(data); const saved = { ...data, updatedAt: new Date().toISOString() }; await this.repository.save(saved); return saved }
   clear(): Promise<void> { return this.repository.clear() }
-  calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
-  project(data: PlannerData): Promise<ProjectionResult> {
+  async calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
+  async project(data: PlannerData): Promise<ProjectionResult> {
     const primary = data.members.find((member) => member.id === data.household.primaryMemberId)
     if (!primary?.plannedRetirementMonth) throw new Error('PRIMARY_RETIREMENT_MONTH_REQUIRED')
     const systemViews = this.retirementSystems(data)

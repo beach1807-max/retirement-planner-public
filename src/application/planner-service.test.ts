@@ -81,6 +81,14 @@ describe('Planner Service 與遷移', () => {
     expect(() => toCalculationInputV01(data)).toThrow('FX_RATE_REQUIRED')
   })
 
+  it('主要規劃人缺少退休月份時以 Promise rejection 回報', async () => {
+    const data = createDemoData('2026-09-01')
+    data.members[0].plannedRetirementMonth = undefined
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+
+    await expect(service.project(data)).rejects.toThrow('PRIMARY_RETIREMENT_MONTH_REQUIRED')
+  })
+
   it('家庭與個人淨資產依持分計算，未提供與明確 0 狀態不同', () => {
     const data = createDemoData('2026-09-01')
     const primary = data.members[0]
