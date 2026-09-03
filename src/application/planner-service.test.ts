@@ -20,6 +20,24 @@ function legacyData() {
 }
 
 describe('Planner Service 與遷移', () => {
+  it('現行版本缺少行情欄位時會安全補齊並保留核心退休資料', async () => {
+    const original = createDemoData('2026-09-01')
+    const incomplete = { ...original } as unknown as Record<string, unknown>
+    delete incomplete.instruments
+    delete incomplete.marketQuotes
+    delete incomplete.exchangeRates
+    delete incomplete.marketDataStamps
+    let saved: unknown = null
+    const service = new PlannerService({ load: async () => incomplete, save: async (data) => { saved = data }, clear: async () => undefined })
+
+    const repaired = await service.load()
+
+    expect(repaired?.assets).toEqual(original.assets)
+    expect(repaired?.members).toEqual(original.members)
+    expect(repaired?.marketDataStamps).toEqual([])
+    expect(saved).toBe(repaired)
+  })
+
   it('載入結構異常的現行版本資料時會拒絕使用且保留原始資料', async () => {
     const invalid = { ...createDemoData('2026-09-01'), assets: undefined }
     let saved = false

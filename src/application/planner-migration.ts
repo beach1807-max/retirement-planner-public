@@ -4,7 +4,17 @@ export function migratePlannerData(value: unknown): PlannerData {
   const data = value as Record<string, unknown> & { schemaVersion?: string; updatedAt?: string }
   if (!data || typeof data !== 'object') throw new Error('INVALID_PLANNER_DATA')
   const marketFields = { instruments: [], marketQuotes: [], exchangeRates: [], marketDataStamps: [] }
-  if (data.schemaVersion === 'planner-data-v0.7') return data as unknown as PlannerData
+  if (data.schemaVersion === 'planner-data-v0.7') {
+    const current = data as unknown as PlannerData
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return current
+    return {
+      ...current,
+      instruments: Array.isArray(current.instruments) ? current.instruments : [],
+      marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [],
+      exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [],
+      marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [],
+    }
+  }
   if (data.schemaVersion === 'planner-data-v0.6') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | keyof typeof marketFields>), schemaVersion: 'planner-data-v0.7', ...marketFields }
   if (data.schemaVersion === 'planner-data-v0.5') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'scenarios' | keyof typeof marketFields>), schemaVersion: 'planner-data-v0.7', scenarios: [], ...marketFields }
   if (data.schemaVersion === 'planner-data-v0.4') return { ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), schemaVersion: 'planner-data-v0.7', portfolios: [], scenarios: [], ...marketFields }

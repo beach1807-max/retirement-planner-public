@@ -22,7 +22,7 @@ export function Dashboard({ data, viewModel, systemEstimates, portfolio, onScope
     : `${Math.floor(result.retirementAgeInMonths / 12)} 歲 ${result.retirementAgeInMonths % 12} 個月`
   const plannedAssets = projection && (moneyMode === 'real' ? projection.projectedAssetsAtPlannedReal : projection.projectedAssetsAtPlannedNominal)
   const currentFlow = projection?.timeline[0]
-  const lastMarketUpdate = data.marketDataStamps.filter((item) => item.status !== 'failed').at(-1)
+  const lastMarketUpdate = (Array.isArray(data.marketDataStamps) ? data.marketDataStamps : []).filter((item) => item.status !== 'failed').at(-1)
 
   return (
     <div className="page-stack">

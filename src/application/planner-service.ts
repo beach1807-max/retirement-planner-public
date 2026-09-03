@@ -83,7 +83,7 @@ export function toCalculationInputV01(data: PlannerData): CalculationInput {
 
 export class PlannerService {
   constructor(private readonly repository: PlannerRepository) {}
-  async load(): Promise<PlannerData | null> { const stored = await this.repository.load(); if (!stored) return null; const migrated = migratePlannerData(stored); validatePlannerData(migrated); if ((stored as unknown as { schemaVersion?: string }).schemaVersion !== migrated.schemaVersion) await this.repository.save(migrated); return migrated }
+  async load(): Promise<PlannerData | null> { const stored = await this.repository.load(); if (!stored) return null; const migrated = migratePlannerData(stored); validatePlannerData(migrated); if (stored !== migrated) await this.repository.save(migrated); return migrated }
   async save(data: PlannerData): Promise<PlannerData> { validatePlannerData(data); const saved = { ...data, updatedAt: new Date().toISOString() }; await this.repository.save(saved); return saved }
   clear(): Promise<void> { return this.repository.clear() }
   calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
