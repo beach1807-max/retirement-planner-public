@@ -81,6 +81,21 @@ export function App() {
 
   if (!loaded) return <div className="loading-screen" role="status">正在讀取退休規劃資料…</div>
 
+  if (!data && persistenceError) {
+    return (
+      <main className="recovery-screen">
+        <section className="recovery-card" role="alert">
+          <p className="eyebrow">本機資料讀取失敗</p>
+          <h1>退休規劃資料暫時無法開啟</h1>
+          <p>資料仍保留在此瀏覽器中，系統沒有清除或覆寫它。請先關閉其他本站分頁後再重新整理。</p>
+          <div className="recovery-actions">
+            <button className="button primary" type="button" onClick={() => window.location.reload()}>重新整理</button>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
   if (!data) {
     return (
       <Onboarding

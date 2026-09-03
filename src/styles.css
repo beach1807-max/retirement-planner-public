@@ -30,6 +30,12 @@ h2 { font-size: clamp(1.22rem, 2vw, 1.5rem); letter-spacing: -.015em; }
 h3 { font-size: 1.05rem; }
 
 .loading-screen { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
+.recovery-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f4f7f4; }
+.recovery-card { width: min(620px, 100%); padding: clamp(24px, 5vw, 48px); border: 1px solid var(--border); border-radius: 22px; background: white; box-shadow: var(--shadow); }
+.recovery-card h1 { margin-bottom: 14px; }
+.recovery-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.65; }
+.recovery-card > .field-error { color: var(--danger); }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px 14px; border-radius: 8px; background: white; color: var(--primary); transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }

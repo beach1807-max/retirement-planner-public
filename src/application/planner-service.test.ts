@@ -20,6 +20,15 @@ function legacyData() {
 }
 
 describe('Planner Service 與遷移', () => {
+  it('載入結構異常的現行版本資料時會拒絕使用且保留原始資料', async () => {
+    const invalid = { ...createDemoData('2026-09-01'), assets: undefined }
+    let saved = false
+    const service = new PlannerService({ load: async () => invalid, save: async () => { saved = true }, clear: async () => undefined })
+
+    await expect(service.load()).rejects.toThrow()
+    expect(saved).toBe(false)
+  })
+
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
