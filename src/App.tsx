@@ -148,7 +148,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} projection={projection} calculating={projection === null} />}
+          {page === 'dashboard' && <Dashboard service={plannerService} data={data} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} projection={projection} calculating={projection === null} />}
           {page === 'data' && <DataPage data={data} summary={plannerService.dashboard(data, 'household')} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}

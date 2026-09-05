@@ -19,8 +19,8 @@ export const TAIWAN_LABOR_RULES_2026 = {
 const LIFE_EXPECTANCY_YEARS: Record<number, number> = { 60: 23, 61: 23, 62: 22, 63: 21, 64: 20, 65: 19, 66: 19, 67: 18, 68: 17, 69: 16, 70: 16, 71: 15, 72: 14, 73: 13, 74: 13, 75: 12, 76: 11, 77: 11, 78: 10, 79: 9, 80: 9, 81: 8, 82: 8, 83: 7, 84: 6, 85: 6 }
 
 export interface LaborInsuranceInput { birthDate: string; averageInsuredSalaryTwd: string; insuredYears: string; claimAge: number }
-export interface LaborPensionInput { birthDate: string; calculationBaseDate: string; currentAccountBalanceTwd: string; contributionYears: string; monthlyContributionSalaryTwd: string; employerContributionRate: string; voluntaryContributionRate: string; projectedAnnualReturnRate: string; annualInflationRate: string; claimAge: number }
-export interface RetirementSystemEstimate { ruleVersion: string; laborInsurance: { status: 'success' | 'ineligible' | 'error'; claimMonth: string; statutoryClaimAge: number; formulaA: string | null; formulaB: string | null; adjustmentRate: string | null; monthlyBenefitRealTwd: string | null }; laborPension: { status: 'monthly' | 'lumpSumOnly' | 'error'; claimMonth: string; projectedAccountBalanceTwd: string | null; monthlyBenefitRealTwd: string | null; lumpSumBenefitTwd: string | null; lifeExpectancyYears: number | null }; errors: string[] }
+export interface LaborPensionInput { claimMode?: 'lumpSum' | 'monthly'; birthDate: string; calculationBaseDate: string; currentAccountBalanceTwd: string; contributionYears: string; monthlyContributionSalaryTwd: string; employerContributionRate: string; voluntaryContributionRate: string; projectedAnnualReturnRate: string; annualInflationRate: string; claimAge: number }
+export interface RetirementSystemEstimate { ruleVersion: string; laborInsurance: { status: 'success' | 'ineligible' | 'error'; claimMonth: string; statutoryClaimAge: number; formulaA: string | null; formulaB: string | null; adjustmentRate: string | null; monthlyBenefitRealTwd: string | null }; laborPension: { monthlyBenefitNominalTwd?: string | null; status: 'monthly' | 'lumpSum' | 'lumpSumOnly' | 'error'; claimMonth: string; projectedAccountBalanceTwd: string | null; monthlyBenefitRealTwd: string | null; lumpSumBenefitTwd: string | null; lifeExpectancyYears: number | null }; errors: string[] }
 
 export function statutoryLaborInsuranceAge(birthDate: string): number {
   const year = Number(birthDate.slice(0, 4))
@@ -58,8 +58,9 @@ export function estimateLaborPension(input: LaborPensionInput) {
   const contribution = new Decimal(input.monthlyContributionSalaryTwd).mul(employerRate.plus(voluntaryRate))
   let balance = new Decimal(input.currentAccountBalanceTwd)
   for (let index = 0; index < months; index += 1) balance = balance.mul(new Decimal(1).plus(monthlyRate)).plus(contribution)
-  const projectedYears = new Decimal(input.contributionYears).plus(new Decimal(months).div(12))
+  const projectedYears = new Decimal(input.contributionYears).plus(contribution.gt(0) ? new Decimal(months).div(12) : 0)
   const roundedBalance = balance.toDecimalPlaces(0)
+  if (input.claimMode === 'lumpSum') return { status: 'lumpSum' as const, claimMonth, projectedAccountBalanceTwd: roundedBalance.toString(), monthlyBenefitRealTwd: null, lumpSumBenefitTwd: roundedBalance.toString(), lifeExpectancyYears: null }
   if (projectedYears.lt(15)) return { status: 'lumpSumOnly' as const, claimMonth, projectedAccountBalanceTwd: roundedBalance.toString(), monthlyBenefitRealTwd: null, lumpSumBenefitTwd: roundedBalance.toString(), lifeExpectancyYears: null }
   const lifeExpectancy = LIFE_EXPECTANCY_YEARS[Math.min(85, Math.floor(input.claimAge))]
   if (!lifeExpectancy) return { status: 'error' as const, claimMonth, projectedAccountBalanceTwd: null, monthlyBenefitRealTwd: null, lumpSumBenefitTwd: null, lifeExpectancyYears: null }
@@ -68,7 +69,7 @@ export function estimateLaborPension(input: LaborPensionInput) {
   const factorYears = new Decimal(1).minus(new Decimal(1).div(new Decimal(1).plus(interest)).pow(lifeExpectancy)).div(new Decimal(12).mul(monthlyInterest)).mul(new Decimal(1).plus(monthlyInterest))
   const monthly = roundedBalance.div(factorYears).div(12).toDecimalPlaces(0)
   const inflationFactor = new Decimal(1).plus(input.annualInflationRate).pow(new Decimal(months).div(12))
-  return { status: 'monthly' as const, claimMonth, projectedAccountBalanceTwd: roundedBalance.toString(), monthlyBenefitRealTwd: monthly.div(inflationFactor).toDecimalPlaces(0).toString(), lumpSumBenefitTwd: roundedBalance.toString(), lifeExpectancyYears: lifeExpectancy }
+  return { status: 'monthly' as const, monthlyBenefitNominalTwd: monthly.toString(), claimMonth, projectedAccountBalanceTwd: roundedBalance.toString(), monthlyBenefitRealTwd: monthly.div(inflationFactor).toDecimalPlaces(0).toString(), lumpSumBenefitTwd: roundedBalance.toString(), lifeExpectancyYears: lifeExpectancy }
 }
 
 export function estimateRetirementSystem(laborInsurance: LaborInsuranceInput, laborPension: LaborPensionInput): RetirementSystemEstimate {

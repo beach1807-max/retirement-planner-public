@@ -102,6 +102,7 @@ export interface PlannerRetirementSystem extends EntityTimestamps {
     claimAge: number
   }
   laborPension: {
+    claimMode?: 'lumpSum' | 'monthly'
     enabled: boolean
     currentAccountBalanceTwd: string
     contributionYears: string

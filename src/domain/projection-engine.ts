@@ -29,7 +29,12 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
   input.contributions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'CONTRIBUTION_NOT_PROVIDED', message: `投入「${item.id}」尚未提供。`, entityId: item.id }))
   input.laborPensions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'LABOR_PENSION_NOT_PROVIDED', message: `${item.memberName}的勞退資料尚未提供。`, entityId: item.id }))
 
-  const scenarios = SCENARIOS.map((scenario) => {
+  if (input.customScenario) {
+    const adjustment = new Decimal(input.customScenario.returnAdjustment)
+    if (!adjustment.isFinite() || adjustment.lt(-1) || adjustment.gt(1)) throw new Error('INVALID_CUSTOM_RETURN_ADJUSTMENT')
+  }
+  const definitions = input.customScenario ? [...SCENARIOS, { id: 'custom' as const, label: '自訂', returnAdjustment: input.customScenario.returnAdjustment }] : SCENARIOS
+  const scenarios = definitions.map((scenario) => {
     const investmentBalances = assets.map((asset) => ({ ...asset, balance: new Decimal(asset.currentValueTwd), active: monthIndex(asset.availableFrom) <= monthIndex(baseMonth) }))
     const contributionBalances = input.contributions.filter((item) => item.status === 'provided').map((item) => ({ ...item, balance: ZERO }))
     const pensionBalances = input.laborPensions.filter((item) => item.status === 'provided').map((item) => ({ ...item, balance: new Decimal(item.currentBalanceTwd) }))
@@ -48,7 +53,8 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
         if (month >= contribution.startMonth && (!contribution.endMonth || month < contribution.endMonth)) contribution.balance = contribution.balance.plus(contribution.amountTwd)
       }
       for (const pension of pensionBalances) {
-        if (cursor > monthIndex(baseMonth) && month <= pension.claimMonth) pension.balance = pension.balance.mul(adjustedMonthlyRate(pension.annualReturnRate, scenario.returnAdjustment).plus(1)).plus(pension.monthlyContributionTwd)
+        const adjustment = scenario.id === 'custom' && !input.customScenario?.adjustLaborPension ? '0' : scenario.returnAdjustment
+        if (cursor > monthIndex(baseMonth) && month <= pension.claimMonth) pension.balance = pension.balance.mul(adjustedMonthlyRate(pension.annualReturnRate, adjustment).plus(1)).plus(pension.monthlyContributionTwd)
       }
 
       const years = milestoneByMonth.get(cursor)

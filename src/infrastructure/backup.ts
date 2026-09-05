@@ -34,7 +34,7 @@ const v04DataSchema = v03DataSchema.omit({ schemaVersion: true }).extend({
   retirementSystems: z.array(z.object({
     id: z.string(), householdId: z.string(), memberId: z.string(), ruleVersion: z.literal('tw-labor-rules-2026-08-20'), status: z.enum(['provided', 'notProvided', 'notApplicable']),
     laborInsurance: z.object({ enabled: z.boolean(), averageInsuredSalaryTwd: z.string(), insuredYears: z.string(), claimAge: z.number() }),
-    laborPension: z.object({ enabled: z.boolean(), currentAccountBalanceTwd: z.string(), contributionYears: z.string(), monthlyContributionSalaryTwd: z.string(), employerContributionRate: z.string(), voluntaryContributionRate: z.string(), projectedAnnualReturnRate: z.string(), claimAge: z.number() }),
+    laborPension: z.object({ claimMode: z.enum(['lumpSum', 'monthly']).optional(), enabled: z.boolean(), currentAccountBalanceTwd: z.string(), contributionYears: z.string(), monthlyContributionSalaryTwd: z.string(), employerContributionRate: z.string(), voluntaryContributionRate: z.string(), projectedAnnualReturnRate: z.string(), claimAge: z.number() }),
     ...timestamp,
   })),
 })

@@ -94,6 +94,8 @@ test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家�
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.getByText('我的投資怎麼分配？')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('未來可能累積多少？')).toBeVisible()
+  await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
+  await page.getByLabel('查看所有期間').check()
   await expect(page.locator('.projection-table tbody tr')).toHaveCount(6)
   for (const row of await page.locator('.projection-table tbody tr').all()) {
     await expect(row.locator('td')).toHaveCount(3)
@@ -107,14 +109,14 @@ test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家�
 
 test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  const scenarioHelp = page.getByRole('button', { name: '說明：保守／穩健／比較樂觀情境' })
+  const scenarioHelp = page.getByRole('button', { name: '說明：預設與自訂報酬情境' })
   await scenarioHelp.click()
-  await expect(page.getByRole('dialog', { name: '保守／穩健／比較樂觀情境計算說明' })).toContainText('保守 = 原報酬率 − 2%')
+  await expect(page.getByRole('dialog', { name: '預設與自訂報酬情境計算說明' })).toContainText('保守 = 原報酬率 − 2 個百分點')
   await expect(scenarioHelp).toHaveAttribute('aria-expanded', 'true')
   await page.screenshot({ path: testInfo.outputPath('calculation-help.png'), fullPage: false })
 
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: '保守／穩健／比較樂觀情境計算說明' })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: '預設與自訂報酬情境計算說明' })).toHaveCount(0)
 })
 
 test('可保存一次性支出並重新產生預測', async ({ page }) => {
@@ -217,6 +219,39 @@ test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('heading', { name: '預測設定' }).last().scrollIntoViewIfNeeded()
   await expect(page.getByLabel('每月退休生活費')).not.toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('settings.png'), fullPage: true })
+})
+
+test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保留', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByLabel('查看時間').selectOption('25')
+  await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
+  await expect(page.locator('.projection-table tbody tr')).toContainText('25 年後')
+  await expect(page.locator('.projection-breakdown')).toContainText('25 年後')
+  await page.getByLabel('加入自訂情境').check()
+  await page.getByLabel('自訂報酬調整（百分點）').fill('2')
+  await expect(page.locator('.projection-table tbody td')).toHaveCount(4)
+  await page.getByLabel('查看範圍').selectOption('class:bond')
+  await expect(page.locator('.projection-table tbody td').last()).toContainText('預估合計 $0')
+  const singleAsset = await page.getByLabel('查看範圍').locator('option[value^="asset:"]').first().getAttribute('value')
+  await page.getByLabel('查看範圍').selectOption(singleAsset!)
+  await expect(page.locator('.projection-table tbody td').last()).not.toContainText('預估合計 $0')
+  await expect(page.locator('.projection-table tbody td').last()).toContainText('勞退累積／請領時金額 $0')
+  await page.getByLabel('查看範圍').selectOption('all')
+  await expect(page.locator('.projection-table tbody td').last()).not.toContainText('預估合計 $0')
+  await page.locator('.projection-table').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('custom-projection.png'), fullPage: true })
+  await page.getByRole('button', { name: '退休制度', exact: true }).click()
+  const primary = page.locator('section.panel').filter({ hasText: '主要規劃人 A' })
+  await primary.getByLabel('勞退請領模式').selectOption('lumpSum')
+  await primary.getByRole('button', { name: '儲存並估算' }).click()
+  await expect(primary.getByText(/選擇一次領/)).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: '退休制度', exact: true }).click()
+  await expect(primary.getByLabel('勞退請領模式')).toHaveValue('lumpSum')
+  await primary.getByLabel('勞退請領模式').selectOption('monthly')
+  await primary.getByRole('button', { name: '儲存並估算' }).click()
+  await expect(primary.getByText(/首期月領約/)).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('pension-monthly.png'), fullPage: true })
 })
 
 test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => {

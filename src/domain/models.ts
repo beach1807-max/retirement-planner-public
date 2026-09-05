@@ -177,6 +177,7 @@ export interface ProjectionLaborPension {
 }
 
 export interface ProjectionInput {
+  customScenario?: { returnAdjustment: string; adjustLaborPension: boolean }
   contractVersion: 'projection-contract-v0.2'
   calculationBaseDate: string
   annualInflationRate: string
@@ -195,7 +196,7 @@ export interface ProjectionMilestone {
 }
 
 export interface ProjectionScenario {
-  id: 'conservative' | 'balanced' | 'optimistic'
+  id: 'conservative' | 'balanced' | 'optimistic' | 'custom'
   label: string
   returnAdjustment: string
   milestones: ProjectionMilestone[]

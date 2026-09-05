@@ -10,6 +10,10 @@ import { migratePlannerData } from './planner-migration'
 import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
 
 export type DashboardScope = 'household' | 'primary' | 'partner'
+export interface ProjectionOptions {
+  scope?: { kind: 'asset' | 'class'; value: string }
+  customScenario?: ProjectionInput['customScenario']
+}
 export interface DashboardViewModel { scope: DashboardScope; totalAssetsTwd: string; totalLiabilitiesTwd: string; netWorthTwd: string; assetCount: number; liabilityCount: number; missingDataCount: number; retirementResultScopeLabel: string }
 export interface RetirementSystemView { memberId: string; memberName: string; status: PlannerData['retirementSystems'][number]['status']; laborInsuranceEnabled: boolean; laborPensionEnabled: boolean; estimate: RetirementSystemEstimate | null }
 
@@ -47,6 +51,7 @@ export function validatePlannerData(data: PlannerData): void {
   if (new Set(data.retirementSystems.map((item) => item.memberId)).size !== data.retirementSystems.length) throw new Error('DUPLICATE_RETIREMENT_SYSTEM')
   for (const item of data.retirementSystems) {
     if (!memberIds.has(item.memberId)) throw new Error('RETIREMENT_SYSTEM_MEMBER_NOT_FOUND')
+    if (item.laborPension.claimMode !== undefined && !['lumpSum', 'monthly'].includes(item.laborPension.claimMode)) throw new Error('INVALID_LABOR_PENSION_CLAIM_MODE')
     if (item.status === 'provided' && item.laborPension.enabled && (new Decimal(item.laborPension.voluntaryContributionRate).lt(0) || new Decimal(item.laborPension.voluntaryContributionRate).gt('0.06') || new Decimal(item.laborPension.employerContributionRate).lt('0.06'))) throw new Error('INVALID_LABOR_PENSION_RATE')
   }
   for (const portfolio of data.portfolios) {
@@ -88,29 +93,36 @@ export class PlannerService {
   async save(data: PlannerData): Promise<PlannerData> { validatePlannerData(data); const saved = { ...data, updatedAt: new Date().toISOString() }; await this.repository.save(saved); return saved }
   clear(): Promise<void> { return this.repository.clear() }
   async calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
-  async project(data: PlannerData): Promise<ProjectionResult> {
+  async project(data: PlannerData, options: ProjectionOptions = {}): Promise<ProjectionResult> {
     validatePlannerData(data)
     const selectedIds = new Set(data.portfolios[0]?.assetIds ?? [])
+    if (options.scope) {
+      for (const asset of data.assets) {
+        const matches = options.scope.kind === 'asset' ? asset.id === options.scope.value : (asset.allocationClass ?? 'other') === options.scope.value
+        if (!matches) selectedIds.delete(asset.id)
+      }
+    }
     const profiles = new Map(data.assumptions.returnProfiles.map((profile) => [profile.id, profile.annualReturnRate]))
     const input: ProjectionInput = {
+      customScenario: options.customScenario,
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,
       assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
-      contributions: data.contributions.map((item) => {
+      contributions: data.contributions.filter((item) => !options.scope || (item.destinationAssetId && selectedIds.has(item.destinationAssetId))).map((item) => {
         const ownerRetirement = data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth
         const primaryRetirement = data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth
         const destinationRate = item.destinationAssetId ? profiles.get(data.assets.find((asset) => asset.id === item.destinationAssetId)?.returnProfileId ?? '') : profiles.get(item.returnProfileId ?? '')
         return { id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
       }),
-      laborPensions: data.retirementSystems.map((record) => {
+      laborPensions: (options.scope ? [] : data.retirementSystems).map((record) => {
         const member = data.members.find((item) => item.id === record.memberId)
         const pension = record.laborPension
         return { id: record.id, memberName: member?.name ?? '未知成員', currentBalanceTwd: pension.currentAccountBalanceTwd, monthlyContributionTwd: new Decimal(pension.monthlyContributionSalaryTwd).mul(new Decimal(pension.employerContributionRate).plus(pension.voluntaryContributionRate)).toString(), annualReturnRate: pension.projectedAnnualReturnRate, claimMonth: member ? addMonths(member.birthDate, pension.claimAge * 12) : data.calculationBaseDate.slice(0, 7), status: record.status === 'provided' && pension.enabled ? 'provided' : record.status === 'notProvided' ? 'notProvided' : 'notApplicable' }
       }),
     }
     const result = await projectRetirement(input)
-    const unresolvedContributionEnds = data.contributions.filter((item) => item.status === 'provided' && ((item.endRule === 'ownerRetirement' && !data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth) || (item.endRule === 'primaryRetirement' && !data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth)))
+    const unresolvedContributionEnds = data.contributions.filter((item) => input.contributions.some((included) => included.id === item.id) && item.status === 'provided' && ((item.endRule === 'ownerRetirement' && !data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth) || (item.endRule === 'primaryRetirement' && !data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth)))
     unresolvedContributionEnds.forEach((item) => result.warnings.push({ code: 'CONTRIBUTION_END_UNRESOLVED', message: `投入「${item.id}」未設定可解析的停止月份，本次持續計算至 35 年後。`, entityId: item.id }))
-    if (data.assets.some((asset) => selectedIds.has(asset.id) && asset.assetType === 'retirementAccount') && data.retirementSystems.some((record) => record.status === 'provided' && record.laborPension.enabled)) result.warnings.push({ code: 'LABOR_PENSION_DUPLICATE_RISK', message: '投資組合同時包含退休帳戶與勞退專戶，請確認兩者不是同一筆餘額。' })
+    if (!options.scope && data.assets.some((asset) => selectedIds.has(asset.id) && asset.assetType === 'retirementAccount') && data.retirementSystems.some((record) => record.status === 'provided' && record.laborPension.enabled)) result.warnings.push({ code: 'LABOR_PENSION_DUPLICATE_RISK', message: '投資組合同時包含退休帳戶與勞退專戶，請確認兩者不是同一筆餘額。' })
     return result
   }
   retirementSystems(data: PlannerData): RetirementSystemView[] {
@@ -119,7 +131,7 @@ export class PlannerService {
       if (!member || record.status !== 'provided') return { memberId: record.memberId, memberName: member?.name ?? '未知成員', status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate: null }
       const estimate = estimateRetirementSystem(
         { birthDate: member.birthDate, averageInsuredSalaryTwd: record.laborInsurance.averageInsuredSalaryTwd, insuredYears: record.laborInsurance.insuredYears, claimAge: record.laborInsurance.claimAge },
-        { birthDate: member.birthDate, calculationBaseDate: data.calculationBaseDate, currentAccountBalanceTwd: record.laborPension.currentAccountBalanceTwd, contributionYears: record.laborPension.contributionYears, monthlyContributionSalaryTwd: record.laborPension.monthlyContributionSalaryTwd, employerContributionRate: record.laborPension.employerContributionRate, voluntaryContributionRate: record.laborPension.voluntaryContributionRate, projectedAnnualReturnRate: record.laborPension.projectedAnnualReturnRate, annualInflationRate: data.assumptions.annualInflationRate, claimAge: record.laborPension.claimAge },
+        { claimMode: record.laborPension.claimMode, birthDate: member.birthDate, calculationBaseDate: data.calculationBaseDate, currentAccountBalanceTwd: record.laborPension.currentAccountBalanceTwd, contributionYears: record.laborPension.contributionYears, monthlyContributionSalaryTwd: record.laborPension.monthlyContributionSalaryTwd, employerContributionRate: record.laborPension.employerContributionRate, voluntaryContributionRate: record.laborPension.voluntaryContributionRate, projectedAnnualReturnRate: record.laborPension.projectedAnnualReturnRate, annualInflationRate: data.assumptions.annualInflationRate, claimAge: record.laborPension.claimAge },
       )
       return { memberId: member.id, memberName: member.name, status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate }
     })
