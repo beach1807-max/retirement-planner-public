@@ -1,4 +1,4 @@
-import type { Asset, Assumptions, Contribution, DataStatus, Household, Member, OwnershipType, RetirementPlan, RetirementUsageScope } from '../domain/models'
+import type { AssetScenarioRates, Asset, Assumptions, Contribution, DataStatus, Household, Member, OwnershipType, RetirementPlan, RetirementUsageScope } from '../domain/models'
 
 export interface MoneyAmount { amount: string; currency: string }
 export interface EntityTimestamps { createdAt: string; updatedAt: string }
@@ -12,6 +12,7 @@ export interface OwnershipFields {
 }
 
 export interface PlannerAsset extends EntityTimestamps, OwnershipFields {
+  scenarioRates?: AssetScenarioRates
   id: string
   householdId: string
   name: string

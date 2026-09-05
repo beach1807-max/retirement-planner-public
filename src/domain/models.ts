@@ -148,7 +148,10 @@ export interface CalculationResult {
   excludedDataSummary: ExcludedDataSummary
 }
 
+export type AssetScenarioRates = { conservative: string; balanced: string; optimistic: string }
+
 export interface ProjectionAsset {
+  scenarioRates?: AssetScenarioRates
   id: string
   name: string
   currentValueTwd: string
@@ -158,6 +161,7 @@ export interface ProjectionAsset {
 }
 
 export interface ProjectionContribution {
+  scenarioRates?: AssetScenarioRates
   id: string
   amountTwd: string
   annualReturnRate: string

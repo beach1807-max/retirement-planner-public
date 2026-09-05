@@ -36,6 +36,10 @@ function validateMoney(money: MoneyAmount): void {
 export function validatePlannerData(data: PlannerData): void {
   const memberIds = new Set(data.members.map((member) => member.id))
   for (const asset of data.assets) {
+    if (asset.scenarioRates) {
+      const rates = [asset.scenarioRates.conservative, asset.scenarioRates.balanced, asset.scenarioRates.optimistic].map((rate) => new Decimal(rate))
+      if (rates.some((rate) => !rate.isFinite() || rate.lt('-0.99') || rate.gt(1)) || rates[0].gt(rates[1]) || rates[1].gt(rates[2])) throw new Error('INVALID_ASSET_SCENARIO_RATES')
+    }
     validateMoney(asset.currentValue)
     validateOwnership(asset, memberIds)
     if (asset.accountId && !data.accounts.some((account) => account.id === asset.accountId)) throw new Error('ASSET_ACCOUNT_NOT_FOUND')
@@ -106,12 +110,12 @@ export class PlannerService {
     const input: ProjectionInput = {
       customScenario: options.customScenario,
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,
-      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
+      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: asset.scenarioRates, id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
       contributions: data.contributions.filter((item) => !options.scope || (item.destinationAssetId && selectedIds.has(item.destinationAssetId))).map((item) => {
         const ownerRetirement = data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth
         const primaryRetirement = data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth
         const destinationRate = item.destinationAssetId ? profiles.get(data.assets.find((asset) => asset.id === item.destinationAssetId)?.returnProfileId ?? '') : profiles.get(item.returnProfileId ?? '')
-        return { id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
+        return { scenarioRates: item.destinationAssetId ? data.assets.find((asset) => asset.id === item.destinationAssetId)?.scenarioRates : undefined, id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
       }),
       laborPensions: (options.scope ? [] : data.retirementSystems).map((record) => {
         const member = data.members.find((item) => item.id === record.memberId)

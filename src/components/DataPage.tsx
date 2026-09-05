@@ -16,12 +16,14 @@ export function DataPage({ data, onChange, summary }: Props) {
   const [ownershipType, setOwnershipType] = useState<PlannerAsset['ownershipType']>('individual')
   const [endRule, setEndRule] = useState<PlannerContribution['endRule']>('ownerRetirement')
   const [destinationKind, setDestinationKind] = useState<'asset' | 'profile'>('asset')
+  const [useAssetRates, setUseAssetRates] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const editedAsset = assetEditor && assetEditor !== 'new' ? data.assets.find((item) => item.id === assetEditor) : undefined
   const editedContribution = contributionEditor && contributionEditor !== 'new' ? data.contributions.find((item) => item.id === contributionEditor) : undefined
 
   function editAsset(asset?: PlannerAsset) {
     setAssetEditor(asset?.id ?? 'new')
+    setUseAssetRates(Boolean(asset?.scenarioRates))
     setOwnershipType(asset?.ownershipType ?? 'individual')
     setError(null)
   }
@@ -46,7 +48,10 @@ export function DataPage({ data, onChange, summary }: Props) {
       const total = owners.reduce((sum, owner) => sum.plus(owner.share), new Decimal(0))
       if (owners.length < 2 || !total.eq(1)) { setError('共同持分至少需要兩位成員，且合計必須等於 100%。'); return }
     }
+    const scenarioRates = useAssetRates ? { conservative: new Decimal(String(form.get('rate-conservative'))).div(100).toString(), balanced: new Decimal(String(form.get('rate-balanced'))).div(100).toString(), optimistic: new Decimal(String(form.get('rate-optimistic'))).div(100).toString() } : undefined
+    if (scenarioRates && (new Decimal(scenarioRates.conservative).gt(scenarioRates.balanced) || new Decimal(scenarioRates.balanced).gt(scenarioRates.optimistic))) { setError('請讓保守報酬率 ≤ 穩健 ≤ 比較樂觀。'); return }
     const asset: PlannerAsset = {
+      scenarioRates,
       id: editedAsset?.id ?? crypto.randomUUID(), householdId: data.household.id, name: String(form.get('name')),
       assetType: String(form.get('assetType')) as PlannerAsset['assetType'], ownershipType,
       allocationClass: String(form.get('allocationClass')) as PlannerAsset['allocationClass'] || undefined,
@@ -108,7 +113,7 @@ export function DataPage({ data, onChange, summary }: Props) {
         </div><h3>投資預測相關設定</h3><p className="muted">分類與報酬不代表已加入預測。儲存後請到「投資組合」選取。</p><div className="form-grid two">
           <label>投資配置分類<select name="allocationClass" defaultValue={editedAsset?.allocationClass}><option value="">尚未分類</option><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>ETF 與基金請依實際投資內容分類。</small></label>
           <label>報酬設定<select name="returnProfileId" defaultValue={editedAsset ? editedAsset.returnProfileId ?? '' : 'balanced'}><option value="">未設定報酬（以 0% 計算）</option>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
-        </div><details className="advanced-settings"><summary>進階資產設定（選填）</summary><div className="context-help-row"><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /></div><div className="form-grid three">
+        </div><label className="checkbox-row"><input type="checkbox" checked={useAssetRates} onChange={(event) => setUseAssetRates(event.target.checked)} />這筆資產自行設定三種情境</label><p className="muted">{useAssetRates ? '直接使用下方年報酬率，取代上方報酬設定，不再加減 2 個百分點。投向這筆資產的每月投入也沿用。' : '預設依報酬設定加減 2 個百分點；房屋、現金等資產可勾選後自行調整。'}</p>{useAssetRates && <div className="form-grid three">{([['conservative', '保守年報酬（%）'], ['balanced', '穩健年報酬（%）'], ['optimistic', '比較樂觀年報酬（%）']] as const).map(([key, label]) => <label key={key}>{label}<input name={'rate-' + key} type="number" min="-99" max="100" step="any" required defaultValue={editedAsset?.scenarioRates ? Number(editedAsset.scenarioRates[key]) * 100 : undefined} /><small>填年報酬率，可為 0 或負數。</small></label>)}</div>}<details className="advanced-settings"><summary>進階資產設定（選填）</summary><div className="context-help-row"><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /></div><div className="form-grid three">
           <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>退休使用範圍<select name="retirementUsageScope" defaultValue={editedAsset?.retirementUsageScope}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入退休</option></select></label>
           <label>可動用日期<input name="availableFrom" type="date" required defaultValue={editedAsset?.availableFrom ?? data.calculationBaseDate} /></label>

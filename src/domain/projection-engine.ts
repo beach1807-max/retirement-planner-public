@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js'
 import { addMonths, monthIndex, toMonth } from './date'
-import type { CalculationMessage, ProjectionInput, ProjectionResult, ProjectionScenario } from './models'
+import type { CalculationMessage, ProjectionInput, ProjectionResult, ProjectionScenario, AssetScenarioRates } from './models'
 
 const ZERO = new Decimal(0)
 const HORIZONS = [10, 15, 20, 25, 30, 35] as const
@@ -14,6 +14,11 @@ const money = (value: Decimal) => value.toDecimalPlaces(2).toFixed(2)
 const adjustedMonthlyRate = (annualRate: string, adjustment: string) => {
   const rate = Decimal.max('-.99', new Decimal(annualRate).plus(adjustment))
   return new Decimal(1).plus(rate).pow(new Decimal(1).div(12)).minus(1)
+}
+
+function assetMonthlyRate(asset: { annualReturnRate: string; scenarioRates?: AssetScenarioRates }, scenario: Pick<ProjectionScenario, 'id' | 'returnAdjustment'>) {
+  if (!asset.scenarioRates) return adjustedMonthlyRate(asset.annualReturnRate, scenario.returnAdjustment)
+  return scenario.id === 'custom' ? adjustedMonthlyRate(asset.scenarioRates.balanced, scenario.returnAdjustment) : adjustedMonthlyRate(asset.scenarioRates[scenario.id], '0')
 }
 
 export async function projectRetirement(input: ProjectionInput): Promise<ProjectionResult> {
@@ -46,10 +51,10 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
       const month = addMonths(baseMonth, cursor - monthIndex(baseMonth))
       for (const asset of investmentBalances) {
         if (!asset.active && cursor >= monthIndex(asset.availableFrom)) asset.active = true
-        if (asset.active && cursor > monthIndex(baseMonth)) asset.balance = asset.balance.mul(adjustedMonthlyRate(asset.annualReturnRate, scenario.returnAdjustment).plus(1))
+        if (asset.active && cursor > monthIndex(baseMonth)) asset.balance = asset.balance.mul(assetMonthlyRate(asset, scenario).plus(1))
       }
       for (const contribution of contributionBalances) {
-        if (cursor > monthIndex(baseMonth)) contribution.balance = contribution.balance.mul(adjustedMonthlyRate(contribution.annualReturnRate, scenario.returnAdjustment).plus(1))
+        if (cursor > monthIndex(baseMonth)) contribution.balance = contribution.balance.mul(assetMonthlyRate(contribution, scenario).plus(1))
         if (month >= contribution.startMonth && (!contribution.endMonth || month < contribution.endMonth)) contribution.balance = contribution.balance.plus(contribution.amountTwd)
       }
       for (const pension of pensionBalances) {

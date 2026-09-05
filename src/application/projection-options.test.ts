@@ -6,6 +6,23 @@ import { estimateLaborPension } from '../domain/retirement-system'
 
 const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
 describe('預測篩選與勞退模式', () => {
+  it('個別資產情境直接使用指定報酬，投入沿用；自訂以穩健加減，備份保留', async () => {
+    const data = createDemoData('2026-09-01')
+    const asset = data.assets[0]
+    asset.scenarioRates = { conservative: '-0.01', balanced: '0', optimistic: '0.005' }
+    data.contributions = []
+    const restored = parseBackup(serializeBackup(data))
+    expect(restored.assets[0].scenarioRates).toEqual(asset.scenarioRates)
+    const options = { scope: { kind: 'asset' as const, value: asset.id }, customScenario: { returnAdjustment: '0', adjustLaborPension: false } }
+    const result = await service.project(restored, options)
+    expect(Number(result.scenarios[2].milestones[0].investmentAssetsNominal)).toBeCloseTo(Number(asset.currentValue.amount) * 1.005 ** 10, 2)
+    expect(result.scenarios[3].milestones).toEqual(result.scenarios[1].milestones)
+    data.contributions = [{ ...createDemoData('2026-09-01').contributions[0], destinationAssetId: asset.id, startDate: '2026-09-01', endRule: 'planEnd', amount: { amount: '100', currency: 'TWD' } }]
+    const withContribution = await service.project(data, options)
+    expect(Number(withContribution.scenarios[1].milestones[0].investmentAssetsNominal)).toBe(Number(asset.currentValue.amount) + 12100)
+    asset.scenarioRates.optimistic = '-0.02'
+    await expect(service.project(data)).rejects.toThrow('INVALID_ASSET_SCENARIO_RATES')
+  })
   it('自訂調整 0 重現穩健，調整 2 重現樂觀；勞退開關獨立', async () => {
     const data = createDemoData('2026-09-01')
     const zero = await service.project(data, { customScenario: { returnAdjustment: '0', adjustLaborPension: true } })

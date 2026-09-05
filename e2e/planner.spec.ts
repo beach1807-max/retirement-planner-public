@@ -62,6 +62,28 @@ test('共同持分須為 100%，並可建立固定日期與報酬設定投入', 
   await expect(page.getByText(/2030-12 停止/)).toBeVisible()
 })
 
+test('資產情境欄位按需展開，保存後可還原為預設', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
+  await expect(page.getByLabel('保守年報酬（%）')).toHaveCount(0)
+  await page.getByLabel('這筆資產自行設定三種情境').check()
+  await page.getByLabel('保守年報酬（%）').fill('-1')
+  await page.getByLabel('穩健年報酬（%）').fill('0')
+  await page.getByLabel('比較樂觀年報酬（%）').fill('0.5')
+  await page.screenshot({ path: testInfo.outputPath('asset-rates.png'), fullPage: true })
+  await page.getByRole('button', { name: '儲存資產', exact: true }).click()
+  await page.reload()
+  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
+  await expect(page.getByLabel('這筆資產自行設定三種情境')).toBeChecked()
+  await expect(page.getByLabel('比較樂觀年報酬（%）')).toHaveValue('0.5')
+  await page.getByLabel('這筆資產自行設定三種情境').uncheck()
+  await page.getByRole('button', { name: '儲存資產', exact: true }).click()
+  await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
+  await expect(page.getByLabel('這筆資產自行設定三種情境')).not.toBeChecked()
+})
+
 test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資料', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByRole('button', { name: '家庭資料' }).click()
