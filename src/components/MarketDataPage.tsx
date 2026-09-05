@@ -9,7 +9,7 @@ const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: '
 export function MarketDataPage({ data, service, onChange }: Props) {
   const [report, setReport] = useState<MarketUpdateReport | null>(null)
   const [updating, setUpdating] = useState(false)
-  const marketAssets = data.assets.filter((asset) => asset.assetType === 'stockEtf')
+  const marketAssets = data.assets.filter((asset) => ['stock', 'etf', 'stockEtf'].includes(asset.assetType))
   const lastStamp = data.marketDataStamps.at(-1)
   const freshnessReference = new Date(lastStamp?.completedAt ?? `${data.calculationBaseDate}T00:00:00Z`).getTime()
   const staleQuotes = data.marketQuotes.filter((quote) => freshnessReference - new Date(`${quote.asOf}T00:00:00Z`).getTime() > 7 * 86400000)

@@ -1,93 +1,67 @@
 import Decimal from 'decimal.js'
-import { calculateRetirement } from './calculation-engine'
-import { addMonths, monthIndex, monthsBetween, toMonth } from './date'
-import type { CalculationInput, CalculationMessage, ProjectionCashFlow, ProjectionInput, ProjectionResult } from './models'
+import { addMonths, monthIndex, toMonth } from './date'
+import type { CalculationMessage, ProjectionInput, ProjectionResult, ProjectionScenario } from './models'
 
 const ZERO = new Decimal(0)
+const HORIZONS = [10, 15, 20, 25, 30, 35] as const
+const SCENARIOS: Array<Pick<ProjectionScenario, 'id' | 'label' | 'returnAdjustment'>> = [
+  { id: 'conservative', label: '保守', returnAdjustment: '-0.02' },
+  { id: 'balanced', label: '穩健', returnAdjustment: '0' },
+  { id: 'optimistic', label: '樂觀', returnAdjustment: '0.02' },
+]
+
 const money = (value: Decimal) => value.toDecimalPlaces(2).toFixed(2)
-
-function monthlyFlow(item: ProjectionCashFlow, month: string): Decimal {
-  if (item.status !== 'provided' || month < item.startMonth || (item.endMonth && month >= item.endMonth)) return ZERO
-  const years = new Decimal(Math.max(0, monthsBetween(item.startMonth, month))).div(12)
-  return new Decimal(item.monthlyAmountTwd).mul(new Decimal(1).plus(item.annualGrowthRate).pow(years))
-}
-
-function fixedInput(input: CalculationInput, plannedMonth: string, assets = input.assets, contributions = input.contributions): CalculationInput {
-  return { ...input, calculationId: `${input.calculationId}-fixed-${plannedMonth}`, assets, contributions, retirementPlan: { ...input.retirementPlan, earliestRetirementMonth: plannedMonth } }
-}
-
-function targetAssets(input: ProjectionInput): Decimal | null {
-  const base = input.baseCalculationInput
-  const primary = base.members.find((member) => member.id === base.household.primaryMemberId)
-  const profile = base.assumptions.returnProfiles.find((item) => item.id === base.retirementPlan.defaultReturnProfileId)
-  if (!primary || !profile || new Decimal(profile.annualReturnRate).lte(-1) || new Decimal(base.assumptions.annualInflationRate).lte(-1)) return null
-  const baseMonth = toMonth(base.calculationBaseDate)
-  const plannedMonth = toMonth(input.plannedRetirementMonth)
-  const planEndMonth = addMonths(primary.birthDate, primary.planningEndAge * 12)
-  const monthlyReturn = new Decimal(1).plus(profile.annualReturnRate).pow(new Decimal(1).div(12)).minus(1)
-  const oneTime = new Map(base.retirementPlan.oneTimeExpenses.map((item) => [toMonth(item.month), new Decimal(item.amountTwdReal)]))
-  const inflation = (month: string) => new Decimal(1).plus(base.assumptions.annualInflationRate).pow(new Decimal(Math.max(0, monthsBetween(baseMonth, month))).div(12))
-  let required = new Decimal(base.retirementPlan.safetyReserveRealTwd).plus(base.retirementPlan.legacyTargetRealTwd).mul(inflation(planEndMonth))
-  for (let cursor = monthIndex(planEndMonth); cursor >= monthIndex(plannedMonth); cursor -= 1) {
-    const month = addMonths(plannedMonth, cursor - monthIndex(plannedMonth))
-    const benefitsReal = input.retirementBenefits.reduce((sum, flow) => sum.plus(monthlyFlow(flow, month)), ZERO)
-    const withdrawalReal = Decimal.max(ZERO, new Decimal(base.retirementPlan.retirementExpenseMonthlyRealTwd).plus(oneTime.get(month) ?? ZERO).minus(benefitsReal))
-    required = required.div(new Decimal(1).plus(monthlyReturn)).plus(withdrawalReal.mul(inflation(month)))
-  }
-  return required.div(inflation(plannedMonth)).toDecimalPlaces(2)
+const adjustedMonthlyRate = (annualRate: string, adjustment: string) => {
+  const rate = Decimal.max('-.99', new Decimal(annualRate).plus(adjustment))
+  return new Decimal(1).plus(rate).pow(new Decimal(1).div(12)).minus(1)
 }
 
 export async function projectRetirement(input: ProjectionInput): Promise<ProjectionResult> {
-  const base = input.baseCalculationInput
-  const primary = base.members.find((member) => member.id === base.household.primaryMemberId)
-  if (!primary) throw new Error('PRIMARY_MEMBER_MISSING')
-  const plannedMonth = toMonth(input.plannedRetirementMonth)
-  const forwardInput = fixedInput(base, plannedMonth)
-  forwardInput.retirementPlan = { ...forwardInput.retirementPlan, retirementExpenseMonthlyRealTwd: '0', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0' }
-  const [forward, fixed] = await Promise.all([
-    calculateRetirement(forwardInput),
-    calculateRetirement(fixedInput(base, plannedMonth)),
-  ])
-  const target = targetAssets(input)
-  const plannedItem = forward.monthlyTimeline.find((item) => item.month === plannedMonth)
-  const projectedNominal = plannedItem ? new Decimal(plannedItem.closingAssets) : null
-  const projectedReal = plannedItem ? new Decimal(plannedItem.closingAssetsReal) : null
-  const readiness = target && target.gt(0) && projectedReal ? projectedReal.div(target).mul(100) : target?.eq(0) ? null : null
-  const warnings: CalculationMessage[] = [
-    ...input.incomes.filter((item) => item.status === 'notProvided').map((item) => ({ code: 'INCOME_NOT_PROVIDED', message: `收入「${item.label ?? item.id}」尚未提供。`, entityId: item.id })),
-    ...input.expenses.filter((item) => item.status === 'notProvided').map((item) => ({ code: 'EXPENSE_NOT_PROVIDED', message: `支出「${item.label ?? item.id}」尚未提供。`, entityId: item.id })),
-    ...input.liabilities.filter((item) => item.status === 'notProvided').map((item) => ({ code: 'LIABILITY_NOT_PROVIDED', message: `負債「${item.label ?? item.id}」尚未提供。`, entityId: item.id })),
-  ]
-  const timeline = forward.monthlyTimeline.map((item) => {
-    const income = input.incomes.reduce((sum, flow) => sum.plus(monthlyFlow(flow, item.month)), ZERO)
-    const expenses = input.expenses.reduce((sum, flow) => sum.plus(monthlyFlow(flow, item.month)), ZERO)
-    let remainingPayments = ZERO
-    let liabilityBalance = ZERO
-    for (const liability of input.liabilities) {
-      if (liability.status !== 'provided') continue
-      const elapsed = Math.max(0, monthsBetween(base.calculationBaseDate, item.month))
-      const balance = Decimal.max(ZERO, new Decimal(liability.balanceTwd).minus(new Decimal(liability.monthlyPaymentTwd).mul(elapsed)))
-      liabilityBalance = liabilityBalance.plus(balance)
-      remainingPayments = remainingPayments.plus(Decimal.min(balance, new Decimal(liability.monthlyPaymentTwd)))
+  if (input.contractVersion !== 'projection-contract-v0.2') throw new Error('UNSUPPORTED_PROJECTION_CONTRACT')
+  const baseMonth = toMonth(input.calculationBaseDate)
+  const inflation = new Decimal(input.annualInflationRate)
+  if (inflation.lte(-1)) throw new Error('INVALID_INFLATION_RATE')
+
+  const warnings: CalculationMessage[] = []
+  const assets = input.assets.filter((asset) => asset.status === 'provided')
+  const excludedAssets = input.assets.filter((asset) => asset.status !== 'provided').map((asset) => ({ id: asset.id, reason: asset.status === 'notProvided' ? '資產金額尚未提供' : '資產標記為不適用' }))
+  input.assets.filter((asset) => asset.status === 'notProvided').forEach((asset) => warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `投資資產「${asset.name}」尚未提供。`, entityId: asset.id }))
+  input.contributions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'CONTRIBUTION_NOT_PROVIDED', message: `投入「${item.id}」尚未提供。`, entityId: item.id }))
+  input.laborPensions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'LABOR_PENSION_NOT_PROVIDED', message: `${item.memberName}的勞退資料尚未提供。`, entityId: item.id }))
+
+  const scenarios = SCENARIOS.map((scenario) => {
+    const investmentBalances = assets.map((asset) => ({ ...asset, balance: new Decimal(asset.currentValueTwd), active: monthIndex(asset.availableFrom) <= monthIndex(baseMonth) }))
+    const contributionBalances = input.contributions.filter((item) => item.status === 'provided').map((item) => ({ ...item, balance: ZERO }))
+    const pensionBalances = input.laborPensions.filter((item) => item.status === 'provided').map((item) => ({ ...item, balance: new Decimal(item.currentBalanceTwd) }))
+    const milestoneByMonth = new Map<number, typeof HORIZONS[number]>(HORIZONS.map((years) => [monthIndex(addMonths(baseMonth, years * 12)), years]))
+    const milestones: ProjectionScenario['milestones'] = []
+    const lastIndex = monthIndex(addMonths(baseMonth, HORIZONS.at(-1)! * 12))
+
+    for (let cursor = monthIndex(baseMonth); cursor <= lastIndex; cursor += 1) {
+      const month = addMonths(baseMonth, cursor - monthIndex(baseMonth))
+      for (const asset of investmentBalances) {
+        if (!asset.active && cursor >= monthIndex(asset.availableFrom)) asset.active = true
+        if (asset.active && cursor > monthIndex(baseMonth)) asset.balance = asset.balance.mul(adjustedMonthlyRate(asset.annualReturnRate, scenario.returnAdjustment).plus(1))
+      }
+      for (const contribution of contributionBalances) {
+        if (cursor > monthIndex(baseMonth)) contribution.balance = contribution.balance.mul(adjustedMonthlyRate(contribution.annualReturnRate, scenario.returnAdjustment).plus(1))
+        if (month >= contribution.startMonth && (!contribution.endMonth || month < contribution.endMonth)) contribution.balance = contribution.balance.plus(contribution.amountTwd)
+      }
+      for (const pension of pensionBalances) {
+        if (cursor > monthIndex(baseMonth) && month <= pension.claimMonth) pension.balance = pension.balance.mul(adjustedMonthlyRate(pension.annualReturnRate, scenario.returnAdjustment).plus(1)).plus(pension.monthlyContributionTwd)
+      }
+
+      const years = milestoneByMonth.get(cursor)
+      if (years) {
+        const investment = investmentBalances.reduce((sum, item) => sum.plus(item.active ? item.balance : ZERO), ZERO).plus(contributionBalances.reduce((sum, item) => sum.plus(item.balance), ZERO))
+        const laborPension = pensionBalances.reduce((sum, item) => sum.plus(item.balance), ZERO)
+        const total = investment.plus(laborPension)
+        const real = total.div(new Decimal(1).plus(inflation).pow(years))
+        milestones.push({ yearsFromNow: years, month, investmentAssetsNominal: money(investment), laborPensionAssetsNominal: money(laborPension), totalAssetsNominal: money(total), totalAssetsReal: money(real) })
+      }
     }
-    const contributions = new Decimal(item.contributions)
-    const retirementIncomeReal = input.retirementBenefits.reduce((sum, flow) => sum.plus(monthlyFlow(flow, item.month)), ZERO)
-    const unallocated = income.minus(expenses).minus(remainingPayments).minus(contributions)
-    if (unallocated.lt(0) && !warnings.some((warning) => warning.code === 'NEGATIVE_PRE_RETIREMENT_CASH_FLOW')) warnings.push({ code: 'NEGATIVE_PRE_RETIREMENT_CASH_FLOW', message: '明確投入高於收入扣除一般支出與負債還款後的餘額；系統未重複扣除投入。' })
-    return { month: item.month, income: money(income), generalExpenses: money(expenses), liabilityPayments: money(remainingPayments), retirementIncomeReal: money(retirementIncomeReal), explicitContributions: money(contributions), unallocatedCashFlow: money(unallocated), liabilityBalance: money(liabilityBalance) }
+    return { ...scenario, milestones }
   })
-  const milestones = [50, 55, 60, 65].map((age) => {
-    const month = addMonths(primary.birthDate, age * 12)
-    const item = fixed.monthlyTimeline.find((entry) => entry.month === month)
-    return { age, month, assetsNominal: item?.closingAssets ?? null, assetsReal: item?.closingAssetsReal ?? null }
-  })
-  return {
-    contractVersion: 'projection-contract-v0.1', plannedRetirementMonth: plannedMonth,
-    projectedAssetsAtPlannedNominal: projectedNominal ? money(projectedNominal) : null,
-    projectedAssetsAtPlannedReal: projectedReal ? money(projectedReal) : null,
-    retirementTargetAssetsReal: target === null ? null : money(target),
-    readinessRate: readiness ? readiness.toDecimalPlaces(1).toString() : null,
-    readinessStatus: target?.eq(0) || (readiness?.gte(100) ?? false) ? 'achieved' : target && projectedReal ? 'notAchieved' : 'unavailable',
-    fixedRetirementStatus: target && projectedReal && projectedReal.gte(target) ? 'success' : 'notAchievableWithinHorizon', timeline, milestones, warnings,
-  }
+
+  return { contractVersion: 'projection-contract-v0.2', calculationBaseDate: input.calculationBaseDate, inflationRate: input.annualInflationRate, horizons: [...HORIZONS], scenarios, warnings, includedAssetIds: assets.map((asset) => asset.id), excludedAssets }
 }

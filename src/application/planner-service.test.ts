@@ -12,7 +12,7 @@ function legacyData() {
     schemaVersion: 'planner-data-v0.1',
     household: { id: current.household.id, name: current.household.name, baseCurrency: 'TWD', primaryMemberId: current.household.primaryMemberId },
     members: current.members.map((member) => ({ id: member.id, householdId: member.householdId, name: member.name, role: member.role, birthDate: member.birthDate, planningEndAge: member.planningEndAge, plannedRetirementMonth: member.plannedRetirementMonth, isActive: member.isActive })),
-    assets: current.assets.map((asset) => ({ id: asset.id, householdId: asset.householdId, name: asset.name, assetType: asset.assetType, ownershipType: asset.ownershipType, ownerMemberId: asset.ownerMemberId, owners: asset.owners, currentValueTwd: asset.currentValue.amount, includeInTotalAssets: asset.includeInTotalAssets, retirementUsageScope: asset.retirementUsageScope, availableFrom: asset.availableFrom, returnProfileId: asset.returnProfileId, status: asset.status })),
+    assets: current.assets.map((asset) => ({ id: asset.id, householdId: asset.householdId, name: asset.name, assetType: asset.assetType === 'etf' ? 'stockEtf' : asset.assetType, ownershipType: asset.ownershipType, ownerMemberId: asset.ownerMemberId, owners: asset.owners, currentValueTwd: asset.currentValue.amount, includeInTotalAssets: asset.includeInTotalAssets, retirementUsageScope: asset.retirementUsageScope, availableFrom: asset.availableFrom, returnProfileId: asset.returnProfileId, status: asset.status })),
     contributions: current.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.amount, usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status })),
     ruleVersion: undefined,
     retirementMode: undefined,
@@ -50,7 +50,7 @@ describe('Planner Service 與遷移', () => {
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
-    expect(migrated.schemaVersion).toBe('planner-data-v0.7')
+    expect(migrated.schemaVersion).toBe('planner-data-v0.8')
     expect(migrated.assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     expect(migrated.assets[0].createdAt).toBe(legacy.updatedAt)
     const legacyInput = { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${legacy.household.id}`, calculationBaseDate: legacy.calculationBaseDate, household: legacy.household, members: legacy.members, assets: legacy.assets, contributions: legacy.contributions, retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions, ruleVersion: 'rules-none-v0.1' } as CalculationInput
@@ -81,12 +81,21 @@ describe('Planner Service 與遷移', () => {
     expect(() => toCalculationInputV01(data)).toThrow('FX_RATE_REQUIRED')
   })
 
-  it('主要規劃人缺少退休月份時以 Promise rejection 回報', async () => {
+  it('主要規劃人缺少退休月份時仍可建立固定期間預測', async () => {
     const data = createDemoData('2026-09-01')
     data.members[0].plannedRetirementMonth = undefined
     const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
 
-    await expect(service.project(data)).rejects.toThrow('PRIMARY_RETIREMENT_MONTH_REQUIRED')
+    await expect(service.project(data)).resolves.toMatchObject({ contractVersion: 'projection-contract-v0.2', horizons: [10, 15, 20, 25, 30, 35] })
+  })
+
+  it('投入停止月份無法解析時持續預測並明確提醒', async () => {
+    const data = createDemoData('2026-09-01')
+    data.members[0].plannedRetirementMonth = undefined
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    const result = await service.project(data)
+    expect(result.warnings.some((item) => item.code === 'CONTRIBUTION_END_UNRESOLVED')).toBe(true)
+    expect(result.scenarios[1].milestones).toHaveLength(6)
   })
 
   it('家庭與個人淨資產依持分計算，未提供與明確 0 狀態不同', () => {
@@ -117,7 +126,7 @@ describe('Planner Service 與遷移', () => {
     const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
     const result = service.portfolio(data)
     expect(result?.totalValueTwd).toBe('6000000.00')
-    expect(result?.allocations.find((item) => item.assetClass === 'stockEtf')?.currentWeight).toBe('1.000000')
+    expect(result?.allocations.find((item) => item.assetClass === 'stock')?.currentWeight).toBe('1.000000')
     data.assets.push({ ...data.assets[0], id: 'house', name: '自住房', assetType: 'property', currentValue: { amount: '20000000', currency: 'TWD' } })
     expect(service.portfolio(data)?.totalValueTwd).toBe('6000000.00')
   })

@@ -1,56 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import { createDemoData } from '../application/planner-data'
-import { toCalculationInputV01 } from '../application/planner-service'
 import type { ProjectionInput } from './models'
 import { projectRetirement } from './projection-engine'
 
 function fixture(): ProjectionInput {
-  const data = createDemoData('2026-09-01')
-  data.members[0].plannedRetirementMonth = '2050-09'
   return {
-    contractVersion: 'projection-contract-v0.1', baseCalculationInput: toCalculationInputV01(data), plannedRetirementMonth: '2050-09',
-    incomes: [{ id: 'salary', monthlyAmountTwd: '100000', annualGrowthRate: '0', startMonth: '2026-09', endMonth: '2050-09', status: 'provided' }],
-    expenses: [{ id: 'living', monthlyAmountTwd: '50000', annualGrowthRate: '0', startMonth: '2026-09', status: 'provided' }],
-    liabilities: [{ id: 'loan', balanceTwd: '120000', monthlyPaymentTwd: '10000', status: 'provided' }],
-    retirementBenefits: [],
+    contractVersion: 'projection-contract-v0.2', calculationBaseDate: '2026-09-01', annualInflationRate: '0.02',
+    assets: [{ id: 'portfolio', name: '投資組合', currentValueTwd: '1000000', annualReturnRate: '0.06', availableFrom: '2026-09-01', status: 'provided' }],
+    contributions: [{ id: 'monthly', amountTwd: '10000', annualReturnRate: '0.06', startMonth: '2026-09', status: 'provided' }],
+    laborPensions: [{ id: 'labor', memberName: '主要規劃人', currentBalanceTwd: '500000', monthlyContributionTwd: '6000', annualReturnRate: '0.03', claimMonth: '2056-09', status: 'provided' }],
   }
 }
 
-describe('完整家庭 Projection', () => {
-  it('產生預計退休資產、目標、準備率與 50/55/60/65 歲節點', async () => {
+describe('固定期間投資與勞退預測', () => {
+  it('輸出六個固定期間與保守、穩健、樂觀三種情境', async () => {
     const result = await projectRetirement(fixture())
-    expect(result.contractVersion).toBe('projection-contract-v0.1')
-    expect(Number(result.projectedAssetsAtPlannedReal)).toBeGreaterThan(0)
-    expect(Number(result.retirementTargetAssetsReal)).toBeGreaterThan(0)
-    expect(result.milestones.map((item) => item.age)).toEqual([50, 55, 60, 65])
+    expect(result.contractVersion).toBe('projection-contract-v0.2')
+    expect(result.horizons).toEqual([10, 15, 20, 25, 30, 35])
+    expect(result.scenarios.map((item) => item.id)).toEqual(['conservative', 'balanced', 'optimistic'])
+    expect(result.scenarios.every((item) => item.milestones.length === 6)).toBe(true)
   })
 
-  it('收入不會自動重複計入資產，但會進入現金流可用額', async () => {
-    const withIncome = fixture()
-    const withoutIncome = fixture()
-    withoutIncome.incomes[0].monthlyAmountTwd = '0'
-    const [first, second] = await Promise.all([projectRetirement(withIncome), projectRetirement(withoutIncome)])
-    expect(first.projectedAssetsAtPlannedNominal).toBe(second.projectedAssetsAtPlannedNominal)
-    expect(Number(first.timeline[0].unallocatedCashFlow)).toBeGreaterThan(Number(second.timeline[0].unallocatedCashFlow))
+  it('每個節點分開輸出投資、勞退、名目合計與今天購買力', async () => {
+    const result = await projectRetirement(fixture())
+    const milestone = result.scenarios[1].milestones[0]
+    expect(Number(milestone.investmentAssetsNominal)).toBeGreaterThan(1000000)
+    expect(Number(milestone.laborPensionAssetsNominal)).toBeGreaterThan(500000)
+    expect(Number(milestone.totalAssetsNominal)).toBe(Number(milestone.investmentAssetsNominal) + Number(milestone.laborPensionAssetsNominal))
+    expect(Number(milestone.totalAssetsReal)).toBeLessThan(Number(milestone.totalAssetsNominal))
   })
 
-  it('notProvided 會提醒，provided 0 與 notApplicable 不會被當成缺漏', async () => {
+  it('三種情境只改變報酬假設並保持結果順序', async () => {
+    const result = await projectRetirement(fixture())
+    const totals = result.scenarios.map((item) => Number(item.milestones.at(-1)?.totalAssetsNominal))
+    expect(totals[0]).toBeLessThan(totals[1])
+    expect(totals[1]).toBeLessThan(totals[2])
+  })
+
+  it('未提供的投資資料不視為零並產生提醒', async () => {
     const input = fixture()
-    input.incomes = [
-      { ...input.incomes[0], id: 'missing', status: 'notProvided' },
-      { ...input.incomes[0], id: 'zero', monthlyAmountTwd: '0', status: 'provided' },
-      { ...input.incomes[0], id: 'na', status: 'notApplicable' },
-    ]
+    input.assets[0].status = 'notProvided'
     const result = await projectRetirement(input)
-    expect(result.warnings.filter((item) => item.code === 'INCOME_NOT_PROVIDED').map((item) => item.entityId)).toEqual(['missing'])
-  })
-
-  it('退休制度收入只降低退休後所需目標，不與資產重複相加', async () => {
-    const withoutBenefit = fixture()
-    const withBenefit = fixture()
-    withBenefit.retirementBenefits = [{ id: 'pension', monthlyAmountTwd: '20000', annualGrowthRate: '0', startMonth: '2050-09', status: 'provided' }]
-    const [plain, supported] = await Promise.all([projectRetirement(withoutBenefit), projectRetirement(withBenefit)])
-    expect(Number(supported.retirementTargetAssetsReal)).toBeLessThan(Number(plain.retirementTargetAssetsReal))
-    expect(supported.projectedAssetsAtPlannedReal).toBe(plain.projectedAssetsAtPlannedReal)
+    expect(result.includedAssetIds).toEqual([])
+    expect(result.excludedAssets[0].reason).toContain('尚未提供')
+    expect(result.warnings[0].code).toBe('ASSET_NOT_PROVIDED')
   })
 })

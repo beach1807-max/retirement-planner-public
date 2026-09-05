@@ -47,6 +47,7 @@ export function DataPage({ data, onChange }: Props) {
     const asset: PlannerAsset = {
       id: editedAsset?.id ?? crypto.randomUUID(), householdId: data.household.id, name: String(form.get('name')),
       assetType: String(form.get('assetType')) as PlannerAsset['assetType'], ownershipType,
+      allocationClass: String(form.get('allocationClass')) as PlannerAsset['allocationClass'] || undefined,
       ownerMemberId: ownershipType === 'individual' ? String(form.get('ownerMemberId')) : undefined, owners,
       currentValue: { amount: String(form.get('currentValue')), currency: 'TWD' }, includeInTotalAssets: form.get('includeInTotalAssets') === 'on',
       retirementUsageScope: String(form.get('retirementUsageScope')) as PlannerAsset['retirementUsageScope'], availableFrom: String(form.get('availableFrom')),
@@ -99,7 +100,8 @@ export function DataPage({ data, onChange }: Props) {
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
         <div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
-          <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="stockEtf">股票／ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
+          <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
+          <label>投資配置分類<select name="allocationClass" defaultValue={editedAsset?.allocationClass}><option value="">不納入投資配置</option><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>ETF 與基金請依實際投資內容分類。</small></label>
           <label>目前價值（TWD）<input name="currentValue" type="number" required min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /></label>
           <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>

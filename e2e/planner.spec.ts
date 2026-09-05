@@ -15,11 +15,11 @@ test.beforeEach(async ({ page }) => {
 
 test('可載入展示資料、完成計算並在重新開啟後保留資料', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('家庭退休資產時間線')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('固定期間資產預估')).toBeVisible()
   await page.reload()
   await expect(page.getByText('林家退休計畫')).toBeVisible()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toBeVisible({ timeout: 15_000 })
 })
 
 test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
@@ -89,18 +89,17 @@ test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資�
   await expect(page.getByText('尚未建立持有部位資料。')).toBeVisible()
 })
 
-test('Dashboard 顯示退休目標、準備率、淨資產與現金流，個人範圍不改退休結果', async ({ page }) => {
+test('Dashboard 顯示配置、固定期間三情境、購買力與次要資產摘要', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByText('退休目標資產')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('退休準備率')).toBeVisible()
-  await expect(page.getByText('目前淨資產')).toBeVisible()
-  await expect(page.getByText('家庭每月現金流基線')).toBeVisible()
-  await expect(page.getByText('指定年齡資產節點')).toBeVisible()
-  const retirementHeading = await page.getByRole('heading', { name: /最早約在/ }).textContent()
+  await expect(page.getByText('目前投資組合配置')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('固定期間資產預估')).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /保守/ })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /穩健/ })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /樂觀/ })).toBeVisible()
+  await expect(page.getByText('完整資產摘要')).toBeVisible()
+  const projectionHeading = await page.getByRole('heading', { name: /35 年後約/ }).textContent()
   await page.getByRole('button', { name: '主要規劃人', exact: true }).click()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toHaveText(retirementHeading ?? '')
-  await page.getByRole('button', { name: '名目金額' }).click()
-  await expect(page.getByRole('button', { name: '名目金額' })).toHaveClass(/active/)
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toHaveText(projectionHeading ?? '')
 })
 
 test('可保存一次性支出並重新產生預測', async ({ page }) => {
@@ -110,8 +109,8 @@ test('可保存一次性支出並重新產生預測', async ({ page }) => {
   await page.getByLabel('月份', { exact: true }).fill('2045-06')
   await page.getByLabel('金額', { exact: true }).fill('500000')
   await page.getByRole('button', { name: '儲存設定' }).click()
-  await page.getByRole('button', { name: '退休總覽' }).click()
-  await expect(page.getByText('退休目標資產')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: '投資與退休預測' }).click()
+  await expect(page.getByText('固定期間資產預估')).toBeVisible({ timeout: 15_000 })
 })
 
 test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ page }) => {
@@ -123,8 +122,8 @@ test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ p
   await expect(primaryPanel.getByText(/首期月領約/)).toBeVisible()
   await primaryPanel.getByRole('button', { name: '儲存並估算' }).click()
   await expect(page.getByText('退休制度資料已儲存並重新估算。')).toBeVisible()
-  await page.getByRole('button', { name: '退休總覽' }).click()
-  await expect(page.getByText('勞保／勞退估算')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: '投資與退休預測' }).click()
+  await expect(page.getByText('勞保年金與勞退專戶')).toBeVisible({ timeout: 15_000 })
 })
 
 test('備份頁可以下載版本化 JSON', async ({ page }) => {
@@ -141,26 +140,26 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
   await page.getByRole('button', { name: '投資組合' }).click()
   await expect(page.getByRole('heading', { name: /投資組合與再平衡/ })).toBeVisible()
   await expect(page.getByText(/偏離 30.0 個百分點/)).toBeVisible()
-  await page.getByLabel('股票／ETF（%）').fill('100')
+  await page.getByLabel('股票（%）').fill('100')
   await page.getByLabel('債券（%）').fill('0')
   await page.getByLabel('現金（%）').fill('0')
   await page.getByRole('button', { name: '儲存投資組合' }).click()
   await expect(page.getByText('投資組合設定已儲存並重新計算。')).toBeVisible()
   await expect(page.getByText('所有配置均在允許偏離範圍內。')).toBeVisible()
-  await page.getByRole('button', { name: '退休總覽' }).click()
-  await expect(page.getByRole('heading', { name: '投資組合與再平衡' })).toBeVisible()
+  await page.getByRole('button', { name: '投資與退休預測' }).click()
+  await expect(page.getByRole('heading', { name: '目前投資組合配置' })).toBeVisible()
 })
 
 test('可建立、比較與刪除不修改正式資料的情境', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByRole('button', { name: '情境比較' }).click()
-  await expect(page.getByRole('row', { name: /基準方案/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('row', { name: /目前投入計畫/ })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('row', { name: /勞退自提 6%/ })).toBeVisible()
-  await page.getByLabel('情境名稱').fill('額外投入測試')
+  await page.getByLabel('方案名稱').fill('額外投入測試')
   await page.getByLabel('每月額外投入（TWD）').fill('5000')
   await page.getByLabel('每月額外投入（TWD）').press('Enter')
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toBeVisible({ timeout: 15_000 })
-  const deleteScenario = page.getByRole('button', { name: '刪除情境 額外投入測試' })
+  const deleteScenario = page.getByRole('button', { name: '刪除方案 額外投入測試' })
   await deleteScenario.focus()
   await deleteScenario.press('Enter')
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toHaveCount(0)
@@ -182,14 +181,13 @@ test('可手動更新官方行情與匯率並同步重算資產', async ({ page 
   await expect(page.getByText('行情與匯率更新完成。')).toBeVisible()
   await expect(page.getByText('70 TWD')).toBeVisible()
   await expect(page.getByText('31.6660')).toBeVisible()
-  await page.getByRole('button', { name: '退休總覽' }).click()
-  await expect(page.getByText(/最後成功／部分成功/)).toBeVisible()
-  await expect(page.locator('.metric-card').filter({ hasText: '目前查看資產' })).toContainText('$1,070,000')
+  await page.getByRole('button', { name: '投資與退休預測' }).click()
+  await expect(page.getByText(/^行情 \d/)).toBeVisible()
 })
 
 test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true })
   await page.getByRole('button', { name: '家庭資料' }).click()
   await expect(page.getByRole('heading', { name: '家庭成員' })).toBeVisible()
@@ -200,7 +198,7 @@ test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => 
   await page.setViewportSize({ width: 375, height: 667 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toBeVisible({ timeout: 15_000 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
   await page.setViewportSize({ width: 844, height: 390 })
@@ -211,7 +209,7 @@ test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => 
 
 test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByRole('heading', { name: /最早約在/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: /35 年後約/ })).toBeVisible({ timeout: 15_000 })
   await page.evaluate(() => navigator.serviceWorker.ready)
   await context.setOffline(true)
   await page.reload()

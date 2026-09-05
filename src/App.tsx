@@ -5,7 +5,7 @@ import { createDemoData, type PlannerData } from './application/planner-data'
 import { PlannerService, type DashboardScope } from './application/planner-service'
 import { ScenarioService } from './application/scenario-service'
 import { MarketDataService } from './application/market-data-service'
-import type { CalculationResult, ProjectionResult } from './domain/models'
+import type { ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 import { OfficialTaiwanMarketDataProvider } from './infrastructure/market-data-provider'
@@ -26,7 +26,7 @@ const MarketDataPage = lazy(() => import('./components/MarketDataPage').then((mo
 const BackupPage = lazy(() => import('./components/BackupPage').then((module) => ({ default: module.BackupPage })))
 
 const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
-  { id: 'dashboard', label: '退休總覽', icon: ChartNoAxesCombined },
+  { id: 'dashboard', label: '投資與退休預測', icon: ChartNoAxesCombined },
   { id: 'data', label: '家庭資料', icon: Database },
   { id: 'retirementSystems', label: '退休制度', icon: Scale },
   { id: 'portfolio', label: '投資組合', icon: PieChart },
@@ -40,7 +40,6 @@ export function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [data, setData] = useState<PlannerData | null>(null)
   const [loaded, setLoaded] = useState(false)
-  const [result, setResult] = useState<CalculationResult | null>(null)
   const [projection, setProjection] = useState<ProjectionResult | null>(null)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
   const [dashboardScope, setDashboardScope] = useState<DashboardScope>('household')
@@ -56,14 +55,13 @@ export function App() {
   useEffect(() => {
     if (!data) return
     let active = true
-    Promise.all([plannerService.calculate(data), plannerService.project(data)])
-      .then(([nextResult, nextProjection]) => { if (active) { setResult(nextResult); setProjection(nextProjection) } })
-      .catch(() => { if (active) setPersistenceError('無法建立完整家庭預測，請檢查預計退休月份與財務資料。') })
+    plannerService.project(data)
+      .then((nextProjection) => { if (active) setProjection(nextProjection) })
+      .catch(() => { if (active) setPersistenceError('無法建立投資與勞退預測，請檢查資產與預測假設。') })
     return () => { active = false }
   }, [data])
 
   async function saveData(next: PlannerData) {
-    setResult(null)
     setProjection(null)
     try {
       const saved = await plannerService.save(next)
@@ -151,7 +149,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} onScopeChange={setDashboardScope} result={result} projection={projection} calculating={result === null || projection === null} />}
+          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} onScopeChange={setDashboardScope} projection={projection} calculating={projection === null} />}
           {page === 'data' && <DataPage data={data} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}

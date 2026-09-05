@@ -148,62 +148,66 @@ export interface CalculationResult {
   excludedDataSummary: ExcludedDataSummary
 }
 
-export interface ProjectionCashFlow {
+export interface ProjectionAsset {
   id: string
-  label?: string
-  monthlyAmountTwd: string
-  annualGrowthRate: string
+  name: string
+  currentValueTwd: string
+  annualReturnRate: string
+  availableFrom: string
+  status: DataStatus
+}
+
+export interface ProjectionContribution {
+  id: string
+  amountTwd: string
+  annualReturnRate: string
   startMonth: string
   endMonth?: string
   status: DataStatus
 }
 
-export interface ProjectionLiability {
+export interface ProjectionLaborPension {
   id: string
-  label?: string
-  balanceTwd: string
-  monthlyPaymentTwd: string
+  memberName: string
+  currentBalanceTwd: string
+  monthlyContributionTwd: string
+  annualReturnRate: string
+  claimMonth: string
   status: DataStatus
 }
 
 export interface ProjectionInput {
-  contractVersion: 'projection-contract-v0.1'
-  baseCalculationInput: CalculationInput
-  plannedRetirementMonth: string
-  incomes: ProjectionCashFlow[]
-  expenses: ProjectionCashFlow[]
-  liabilities: ProjectionLiability[]
-  retirementBenefits: ProjectionCashFlow[]
-}
-
-export interface ProjectionTimelineItem {
-  month: string
-  income: string
-  generalExpenses: string
-  liabilityPayments: string
-  retirementIncomeReal: string
-  explicitContributions: string
-  unallocatedCashFlow: string
-  liabilityBalance: string
+  contractVersion: 'projection-contract-v0.2'
+  calculationBaseDate: string
+  annualInflationRate: string
+  assets: ProjectionAsset[]
+  contributions: ProjectionContribution[]
+  laborPensions: ProjectionLaborPension[]
 }
 
 export interface ProjectionMilestone {
-  age: number
+  yearsFromNow: 10 | 15 | 20 | 25 | 30 | 35
   month: string
-  assetsNominal: string | null
-  assetsReal: string | null
+  investmentAssetsNominal: string
+  laborPensionAssetsNominal: string
+  totalAssetsNominal: string
+  totalAssetsReal: string
+}
+
+export interface ProjectionScenario {
+  id: 'conservative' | 'balanced' | 'optimistic'
+  label: string
+  returnAdjustment: string
+  milestones: ProjectionMilestone[]
 }
 
 export interface ProjectionResult {
-  contractVersion: 'projection-contract-v0.1'
-  plannedRetirementMonth: string
-  projectedAssetsAtPlannedNominal: string | null
-  projectedAssetsAtPlannedReal: string | null
-  retirementTargetAssetsReal: string | null
-  readinessRate: string | null
-  readinessStatus: 'achieved' | 'notAchieved' | 'unavailable'
-  fixedRetirementStatus: CalculationResult['status']
-  timeline: ProjectionTimelineItem[]
-  milestones: ProjectionMilestone[]
+  contractVersion: 'projection-contract-v0.2'
+  calculationBaseDate: string
+  inflationRate: string
+  horizons: Array<10 | 15 | 20 | 25 | 30 | 35>
+  scenarios: ProjectionScenario[]
   warnings: CalculationMessage[]
+  includedAssetIds: string[]
+  excludedAssets: Array<{ id: string; reason: string }>
 }

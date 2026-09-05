@@ -53,15 +53,22 @@ const v07DataSchema = v06DataSchema.omit({ schemaVersion: true }).extend({
   exchangeRates: z.array(z.object({ id: z.string(), householdId: z.string(), fromCurrency: z.string(), toCurrency: z.literal('TWD'), rate: z.string(), asOf: z.string(), sourceId: z.string(), fetchedAt: z.string(), ...timestamp })),
   marketDataStamps: z.array(z.object({ id: z.string(), householdId: z.string(), providerId: z.string(), status: z.enum(['success', 'partial', 'failed']), updatedAssetIds: z.array(z.string()), errors: z.array(z.string()), attemptedAt: z.string(), completedAt: z.string(), ...timestamp })),
 })
+const v08AssetType = z.enum(['cash', 'timeDeposit', 'stock', 'etf', 'stockEtf', 'bond', 'fund', 'moneyMarketFund', 'insurance', 'property', 'retirementAccount', 'other'])
+const v08AllocationClass = z.enum(['stock', 'bond', 'moneyMarket', 'cash', 'other'])
+const v08DataSchema = v07DataSchema.omit({ schemaVersion: true, assets: true, portfolios: true }).extend({
+  schemaVersion: z.literal('planner-data-v0.8'),
+  assets: z.array(z.object({ ...v03AssetBase, assetType: v08AssetType, allocationClass: v08AllocationClass.optional(), currentValue: moneySchema, ...timestamp })),
+  portfolios: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), scope: z.literal('household'), assetIds: z.array(z.string()), targets: z.array(z.object({ assetClass: v08AllocationClass, targetWeight: z.string() })), driftThreshold: z.string(), ...timestamp })),
+})
 
 export function serializeBackup(data: PlannerData): string {
-  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.7', exportedAt: new Date().toISOString(), data }, null, 2)
+  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.8', exportedAt: new Date().toISOString(), data }, null, 2)
 }
 
 export function parseBackup(value: string): PlannerData {
   const parsed = JSON.parse(value) as { backupVersion?: string; data?: unknown }
-  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
-  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : v07DataSchema.parse(parsed.data)
+  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7', 'retirement-planner-backup-v0.8'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
+  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.7' ? v07DataSchema.parse(parsed.data) : v08DataSchema.parse(parsed.data)
   const migrated = migratePlannerData(source)
   validatePlannerData(migrated)
   return migrated
