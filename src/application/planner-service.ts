@@ -90,7 +90,7 @@ export class PlannerService {
   async calculate(data: PlannerData): Promise<CalculationResult> { return calculateRetirement(toCalculationInputV01(data)) }
   async project(data: PlannerData): Promise<ProjectionResult> {
     validatePlannerData(data)
-    const selectedIds = new Set(data.portfolios[0]?.assetIds ?? data.assets.filter((asset) => asset.allocationClass && asset.allocationClass !== 'other').map((asset) => asset.id))
+    const selectedIds = new Set(data.portfolios[0]?.assetIds ?? [])
     const profiles = new Map(data.assumptions.returnProfiles.map((profile) => [profile.id, profile.annualReturnRate]))
     const input: ProjectionInput = {
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,

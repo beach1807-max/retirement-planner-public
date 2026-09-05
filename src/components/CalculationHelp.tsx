@@ -45,7 +45,7 @@ export function CalculationHelp({ topic, label, align = 'start' }: Props) {
       <span className="calculation-help-summary">{content.summary}</span>
       {content.formula && <code>{content.formula}</code>}
       {content.note && <small>{content.note}</small>}
-      {content.version && <small>規則版本：{content.version}</small>}
+
     </span>}
   </span>
 }

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ArchiveRestore, ChartNoAxesCombined, Database, FlaskConical, House, PieChart, RefreshCw, Scale, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
-import { PlannerService, type DashboardScope } from './application/planner-service'
+import { PlannerService } from './application/planner-service'
 import { ScenarioService } from './application/scenario-service'
 import { MarketDataService } from './application/market-data-service'
 import type { ProjectionResult } from './domain/models'
@@ -42,7 +42,6 @@ export function App() {
   const [loaded, setLoaded] = useState(false)
   const [projection, setProjection] = useState<ProjectionResult | null>(null)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
-  const [dashboardScope, setDashboardScope] = useState<DashboardScope>('household')
   const { offlineReady: [offlineReady], needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
 
   useEffect(() => {
@@ -149,8 +148,8 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard data={data} viewModel={plannerService.dashboard(data, dashboardScope)} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} onScopeChange={setDashboardScope} projection={projection} calculating={projection === null} />}
-          {page === 'data' && <DataPage data={data} onChange={saveData} />}
+          {page === 'dashboard' && <Dashboard data={data} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} projection={projection} calculating={projection === null} />}
+          {page === 'data' && <DataPage data={data} summary={plannerService.dashboard(data, 'household')} onChange={saveData} />}
           {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}
           {page === 'portfolio' && <PortfolioPage data={data} result={plannerService.portfolio(data)} onChange={saveData} />}

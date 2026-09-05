@@ -3,13 +3,14 @@ import { useState, type FormEvent } from 'react'
 import { Pencil, Plus, Trash2, Users, WalletCards } from 'lucide-react'
 import type { PlannerAsset, PlannerContribution, PlannerData } from '../application/planner-data'
 import { FinancialDataSections } from './FinancialDataSections'
+import type { DashboardViewModel } from '../application/planner-service'
 import { CalculationHelp } from './CalculationHelp'
 
-interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
+interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 const statusLabels = { provided: '已提供', notProvided: '未提供', notApplicable: '不適用' }
 
-export function DataPage({ data, onChange }: Props) {
+export function DataPage({ data, onChange, summary }: Props) {
   const [assetEditor, setAssetEditor] = useState<string | 'new' | null>(data.assets.length === 0 ? 'new' : null)
   const [contributionEditor, setContributionEditor] = useState<string | 'new' | null>(null)
   const [ownershipType, setOwnershipType] = useState<PlannerAsset['ownershipType']>('individual')
@@ -74,8 +75,6 @@ export function DataPage({ data, onChange }: Props) {
     const startDate = String(form.get('startDate'))
     const endDate = endRule === 'fixedDate' ? String(form.get('endDate')) : undefined
     if (endRule === 'fixedDate' && (!endDate || endDate < startDate.slice(0, 7))) { setError('固定停止月份不可早於投入開始月份。'); return }
-    const sourceMember = data.members.find((member) => member.id === String(form.get('sourceMemberId')))
-    if (endRule === 'ownerRetirement' && sourceMember?.role !== 'primary' && !sourceMember?.plannedRetirementMonth) { setError('此成員尚未設定預計退休月份，請先在上方成員資料補填。'); return }
     const now = new Date().toISOString()
     const contribution: PlannerContribution = {
       id: editedContribution?.id ?? crypto.randomUUID(), householdId: data.household.id, sourceMemberId: String(form.get('sourceMemberId')),
@@ -88,42 +87,44 @@ export function DataPage({ data, onChange }: Props) {
     setContributionEditor(null); setError(null)
   }
 
-  return <div className="page-stack">
+  return <div className="page-stack"><section className="panel"><h2>家庭完整資產摘要</h2><p className="muted">這是完整財產紀錄，與投資組合的預測範圍不同；共同資產只計一次。</p><div className="cashflow-grid"><article><CalculationHelp label="完整資產總額" topic="totalAssets" /><strong>{currency.format(Number(summary.totalAssetsTwd))}</strong></article><article><CalculationHelp label="總負債" topic="totalLiabilities" /><strong>{currency.format(Number(summary.totalLiabilitiesTwd))}</strong></article><article><CalculationHelp label="淨資產" topic="netWorth" /><strong>{currency.format(Number(summary.netWorthTwd))}</strong></article></div></section>
     <section className="panel">
       <div className="panel-heading"><div><h2><Users size={21} /> 家庭成員</h2><p>可直接修正姓名、出生日期及預計退休月份。</p></div></div>
       <div className="member-grid">{data.members.map((member) => <form className="member-card member-editor" key={member.id} onSubmit={(event) => saveMember(event, member.id)}>
-        <span className="avatar">{member.name.slice(0, 1)}</span><div><strong>{member.role === 'primary' ? '主要規劃人' : member.role === 'partner' ? '伴侶' : '其他成員'}</strong><label>姓名<input name="name" required defaultValue={member.name} /></label><label>出生日期<input name="birthDate" type="date" required defaultValue={member.birthDate} /></label><label>預計退休月份<input name="plannedRetirementMonth" type="month" required={member.role === 'primary'} defaultValue={member.plannedRetirementMonth} /></label><button className="button small secondary" type="submit">儲存成員</button></div>
+        <span className="avatar">{member.name.slice(0, 1)}</span><div><strong>{member.role === 'primary' ? '主要規劃人' : member.role === 'partner' ? '伴侶' : '其他成員'}</strong><label>姓名<input name="name" required defaultValue={member.name} /></label><label>出生日期<input name="birthDate" type="date" required defaultValue={member.birthDate} /></label><label>預計退休月份<input name="plannedRetirementMonth" type="month"  defaultValue={member.plannedRetirementMonth} /></label><button className="button small secondary" type="submit">儲存成員</button></div>
       </form>)}</div>
     </section>
 
     <section className="panel">
-      <div className="panel-heading"><div><h2><WalletCards size={21} /> 退休資產</h2><p>階段一介面以 TWD 輸入；共同資產持分須由你明確指定。</p></div><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button></div>
+      <div className="panel-heading"><div><h2><WalletCards size={21} /> 我的資產</h2><p>把目前擁有的資產記錄在這裡。記錄後，到「投資組合」選擇哪些資產要加入預測；所有金額以新臺幣填寫。</p></div><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button></div>
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
-        <div className="context-help-row" aria-label="資產欄位說明"><CalculationHelp label="配置分類" topic="assetAllocation" /><CalculationHelp label="所有權" topic="ownership" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="報酬設定" topic="annualReturn" /></div>
-        <div className="form-grid three">
+        <h3>基本資料</h3><p className="muted">這是什麼、現在值多少、是誰的。</p><div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
           <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
-          <label>投資配置分類<select name="allocationClass" defaultValue={editedAsset?.allocationClass}><option value="">不納入投資配置</option><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>ETF 與基金請依實際投資內容分類。</small></label>
           <label>目前價值（TWD）<input name="currentValue" type="number" required min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /></label>
-          <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>
           {ownershipType === 'individual' && <label>所屬成員<select name="ownerMemberId" defaultValue={editedAsset?.ownerMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
           {ownershipType === 'joint' && data.members.map((member) => <label key={member.id}>{member.name} 持分（%）<input name={`share-${member.id}`} type="number" min="0" max="100" step="0.01" defaultValue={Number(editedAsset?.owners?.find((owner) => owner.memberId === member.id)?.share ?? 0) * 100 || undefined} /></label>)}
+        </div><h3>投資預測相關設定</h3><p className="muted">分類與報酬不代表已加入預測。儲存後請到「投資組合」選取。</p><div className="form-grid two">
+          <label>投資配置分類<select name="allocationClass" defaultValue={editedAsset?.allocationClass}><option value="">尚未分類</option><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>ETF 與基金請依實際投資內容分類。</small></label>
+          <label>報酬設定<select name="returnProfileId" defaultValue={editedAsset ? editedAsset.returnProfileId ?? '' : 'balanced'}><option value="">未設定報酬（以 0% 計算）</option>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+        </div><details className="advanced-settings"><summary>進階資產設定（選填）</summary><div className="context-help-row"><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /></div><div className="form-grid three">
+          <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>退休使用範圍<select name="retirementUsageScope" defaultValue={editedAsset?.retirementUsageScope}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入退休</option></select></label>
           <label>可動用日期<input name="availableFrom" type="date" required defaultValue={editedAsset?.availableFrom ?? data.calculationBaseDate} /></label>
-          <label>報酬設定<select name="returnProfileId" defaultValue={editedAsset?.returnProfileId}>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
           <label>所屬帳戶<select name="accountId" defaultValue={editedAsset?.accountId}><option value="">未指定</option>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           <label>地區<select name="region" defaultValue={editedAsset?.region}><option value="">未指定</option><option value="taiwan">臺灣</option><option value="global">全球</option><option value="us">美國</option><option value="other">其他</option></select></label>
           <label>風險分類<select name="riskLevel" defaultValue={editedAsset?.riskLevel}><option value="">未指定</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
           <label>不動產地址（選填）<input name="propertyAddress" defaultValue={editedAsset?.propertyAddress} /></label>
           <label className="checkbox-row"><input name="includeInTotalAssets" type="checkbox" defaultChecked={editedAsset?.includeInTotalAssets ?? true} /><span>納入總資產</span></label>
-        </div>{error && <div className="field-error" role="alert">{error}</div>}<div className="form-actions"><button className="button ghost" type="button" onClick={() => setAssetEditor(null)}>取消</button><button className="button primary" type="submit">儲存資產</button></div>
+        </div></details>{error && <div className="field-error" role="alert">{error}</div>}<div className="form-actions"><button className="button ghost" type="button" onClick={() => setAssetEditor(null)}>取消</button><button className="button primary" type="submit">儲存資產</button></div>
       </form>}
       <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{currency.format(Number(asset.currentValue.amount))}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id), holdings: data.holdings.filter((item) => item.assetId !== asset.id) })}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
     </section>
 
     <section className="panel">
-      <div className="panel-heading"><div><h2>每月可投入資金</h2><p>支援四種停止規則，並可投入指定資產或報酬設定。</p></div><button className="button secondary" onClick={() => editContribution()}><Plus size={18} /> 新增投入</button></div>
+      <div className="panel-heading"><div><h2>每月可投入資金</h2><p>只有在這裡建立的投入才會加入預測，一般收入不會自動算成投資。每月先計息，再加入當月投入。</p></div><button className="button secondary" onClick={() => editContribution()}><Plus size={18} /> 新增投入</button></div>
+      <p className="muted">停止月份本身不再投入。若依成員退休日期停止但日期未填，會持續投入至 35 年後。</p>
       {contributionEditor && <form key={contributionEditor} className="editor-form" onSubmit={saveContribution}>
         <div className="context-help-row" aria-label="投入欄位說明"><CalculationHelp label="每月投入" topic="contribution" /><CalculationHelp label="停止規則" topic="contributionEnd" /></div>
         <div className="form-grid three">
@@ -132,7 +133,7 @@ export function DataPage({ data, onChange }: Props) {
           <label>資料狀態<select name="status" defaultValue={editedContribution?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>使用範圍<select name="usageScope" defaultValue={editedContribution?.usageScope ?? 'household'}><option value="personal">來源成員個人</option><option value="household">家庭退休可用</option></select></label>
           <label>開始日期<input name="startDate" type="date" required defaultValue={editedContribution?.startDate ?? data.calculationBaseDate} /></label>
-          <label>停止規則<select name="endRule" value={endRule} onChange={(event) => setEndRule(event.target.value as PlannerContribution['endRule'])}><option value="ownerRetirement">來源成員退休時</option><option value="primaryRetirement">主要規劃人退休時</option><option value="fixedDate">固定月份</option><option value="planEnd">規劃終點</option></select></label>
+          <label>停止規則<select name="endRule" value={endRule} onChange={(event) => setEndRule(event.target.value as PlannerContribution['endRule'])}><option value="ownerRetirement">來源成員退休時</option><option value="primaryRetirement">主要規劃人退休時</option><option value="fixedDate">固定月份</option><option value="planEnd">持續投入至 35 年後</option></select></label>
           {endRule === 'fixedDate' && <label>固定停止月份<input name="endDate" type="month" required defaultValue={editedContribution?.endDate} /></label>}
           <label>投入目的<select value={destinationKind} onChange={(event) => setDestinationKind(event.target.value as 'asset' | 'profile')}><option value="asset">指定資產</option><option value="profile">報酬設定</option></select></label>
           {destinationKind === 'asset' ? <label>目的資產<select name="destinationAssetId" required defaultValue={editedContribution?.destinationAssetId}>{data.assets.filter((asset) => asset.retirementUsageScope !== 'excluded').map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label> : <label>報酬設定<select name="returnProfileId" required defaultValue={editedContribution?.returnProfileId}>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>}

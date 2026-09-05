@@ -24,9 +24,9 @@ describe('計算規則說明', () => {
     render(<div data-testid="outside"><CalculationHelp topic="nominalValue" /><CalculationHelp topic="inflation" /></div>)
 
     await user.click(screen.getByRole('button', { name: '說明：名目金額' }))
-    await user.click(screen.getByRole('button', { name: '說明：年化通膨率' }))
+    await user.click(screen.getByRole('button', { name: '說明：年通膨率' }))
     expect(screen.queryByRole('dialog', { name: '名目金額計算說明' })).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: '年化通膨率計算說明' })).toBeVisible()
+    expect(screen.getByRole('dialog', { name: '年通膨率計算說明' })).toBeVisible()
 
     fireEvent.pointerDown(screen.getByTestId('outside'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

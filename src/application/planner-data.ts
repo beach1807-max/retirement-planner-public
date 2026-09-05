@@ -173,7 +173,7 @@ export interface StarterDataInput {
   householdName: string
   primaryName: string
   primaryBirthDate: string
-  primaryPlannedRetirementMonth: string
+  primaryPlannedRetirementMonth?: string
   planningEndAge: number
   partnerName?: string
   partnerBirthDate?: string
