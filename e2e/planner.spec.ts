@@ -1,4 +1,13 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function navigateTo(page: Page, label: string, isMobile: boolean) {
+  if (isMobile && ['預測設定', '備份還原', '情境比較', '行情更新'].includes(label)) {
+    await page.getByRole('button', { name: '更多功能' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: label }).click()
+  } else {
+    await page.getByRole('button', { name: label }).click()
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
@@ -141,9 +150,9 @@ test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ 
   await expect(page.getByRole('dialog', { name: '預設與自訂報酬情境計算說明' })).toHaveCount(0)
 })
 
-test('可保存一次性支出並重新產生預測', async ({ page }) => {
+test('可保存一次性支出並重新產生預測', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '預測設定' }).click()
+  await navigateTo(page, '預測設定', isMobile)
   await page.getByText('舊版退休試算資料（選填）', { exact: true }).click()
   await page.getByLabel('項目', { exact: true }).fill('整修支出')
   await page.getByLabel('月份', { exact: true }).fill('2045-06')
@@ -166,9 +175,9 @@ test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ p
   await expect(page.getByText('勞保年金與勞退專戶')).toBeVisible({ timeout: 15_000 })
 })
 
-test('備份頁可以下載版本化 JSON', async ({ page }) => {
+test('備份頁可以下載版本化 JSON', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '備份還原' }).click()
+  await navigateTo(page, '備份還原', isMobile)
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '匯出 JSON 備份' }).click()
   const download = await downloadPromise
@@ -190,9 +199,9 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '我的投資怎麼分配？' })).toBeVisible()
 })
 
-test('可建立、比較與刪除不修改正式資料的情境', async ({ page }) => {
+test('可建立、比較與刪除不修改正式資料的情境', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '情境比較' }).click()
+  await navigateTo(page, '情境比較', isMobile)
   await expect(page.getByRole('row', { name: /目前投入計畫/ })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('row', { name: /勞退自提 6%/ })).toBeVisible()
   await page.getByLabel('方案名稱').fill('額外投入測試')
@@ -205,14 +214,14 @@ test('可建立、比較與刪除不修改正式資料的情境', async ({ page 
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toHaveCount(0)
 })
 
-test('可手動更新官方行情與匯率並同步重算資產', async ({ page }) => {
+test('可手動更新官方行情與匯率並同步重算資產', async ({ page, isMobile }) => {
   await page.route('**/api/market-data?*', async (route) => route.fulfill({ json: {
     quotes: [{ symbol: '0050', price: '70', currency: 'TWD', asOf: '2026-09-02', sourceId: 'twse-openapi-v1' }],
     rates: [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: '31.666', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }, { fromCurrency: 'JPY', toCurrency: 'TWD', rate: '0.1984', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }, { fromCurrency: 'EUR', toCurrency: 'TWD', rate: '36.744', asOf: '2026-08-31', sourceId: 'cbc-bp01d01' }],
     errors: [], fetchedAt: '2026-09-03T00:00:00Z',
   } }))
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '行情更新' }).click()
+  await navigateTo(page, '行情更新', isMobile)
   const firstAsset = page.locator('fieldset').filter({ hasText: '退休投資帳戶' })
   await firstAsset.getByLabel('上市代碼').fill('0050')
   await firstAsset.getByLabel('持有數量').fill('1000')
@@ -225,7 +234,7 @@ test('可手動更新官方行情與匯率並同步重算資產', async ({ page 
   await expect(page.getByText(/^行情 \d/)).toBeVisible()
 })
 
-test('視覺稽核截圖', async ({ page }, testInfo) => {
+test('視覺稽核截圖', async ({ page, isMobile }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('onboarding.png') })
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
@@ -236,7 +245,7 @@ test('視覺稽核截圖', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '新增資產' }).click()
   await page.locator('.editor-form').scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('asset-editor.png') })
-  await page.getByRole('button', { name: '預測設定' }).click()
+  await navigateTo(page, '預測設定', isMobile)
   await expect(page.getByRole('button', { name: '儲存設定' })).toBeVisible()
   await page.getByRole('heading', { name: '預測設定' }).last().scrollIntoViewIfNeeded()
   await expect(page.getByLabel('每月退休生活費')).not.toBeVisible()

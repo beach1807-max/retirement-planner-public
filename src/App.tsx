@@ -9,6 +9,7 @@ import type { ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 import { OfficialTaiwanMarketDataProvider } from './infrastructure/market-data-provider'
+import { MobileNavigation } from './components/MobileNavigation'
 
 type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'scenarios' | 'market' | 'settings' | 'backup'
 
@@ -169,17 +170,7 @@ export function App() {
         </Suspense>
       </main>
 
-      <nav className="bottom-nav" aria-label="行動版主要功能">
-        {navigation.map((item) => {
-          const Icon = item.icon
-          return (
-            <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} aria-label={item.label}>
-              <Icon size={21} aria-hidden="true" />
-              <span>{item.label.replace('退休', '')}</span>
-            </button>
-          )
-        })}
-      </nav>
+      <MobileNavigation items={navigation} page={page} onNavigate={setPage} />
     </div>
   )
 }
