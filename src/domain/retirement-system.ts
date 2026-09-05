@@ -18,9 +18,9 @@ export const TAIWAN_LABOR_RULES_2026 = {
 
 const LIFE_EXPECTANCY_YEARS: Record<number, number> = { 60: 23, 61: 23, 62: 22, 63: 21, 64: 20, 65: 19, 66: 19, 67: 18, 68: 17, 69: 16, 70: 16, 71: 15, 72: 14, 73: 13, 74: 13, 75: 12, 76: 11, 77: 11, 78: 10, 79: 9, 80: 9, 81: 8, 82: 8, 83: 7, 84: 6, 85: 6 }
 
-export interface LaborInsuranceInput { birthDate: string; averageInsuredSalaryTwd: string; insuredYears: string; claimAge: number }
+export interface LaborInsuranceInput { calculationBaseDate?: string; birthDate: string; averageInsuredSalaryTwd: string; insuredYears: string; claimAge: number }
 export interface LaborPensionInput { claimMode?: 'lumpSum' | 'monthly'; birthDate: string; calculationBaseDate: string; currentAccountBalanceTwd: string; contributionYears: string; monthlyContributionSalaryTwd: string; employerContributionRate: string; voluntaryContributionRate: string; projectedAnnualReturnRate: string; annualInflationRate: string; claimAge: number }
-export interface RetirementSystemEstimate { ruleVersion: string; laborInsurance: { status: 'success' | 'ineligible' | 'error'; claimMonth: string; statutoryClaimAge: number; formulaA: string | null; formulaB: string | null; adjustmentRate: string | null; monthlyBenefitRealTwd: string | null }; laborPension: { monthlyBenefitNominalTwd?: string | null; status: 'monthly' | 'lumpSum' | 'lumpSumOnly' | 'error'; claimMonth: string; projectedAccountBalanceTwd: string | null; monthlyBenefitRealTwd: string | null; lumpSumBenefitTwd: string | null; lifeExpectancyYears: number | null }; errors: string[] }
+export interface RetirementSystemEstimate { ruleVersion: string; laborInsurance: { projectedInsuredYears: string; additionalInsuredMonths: number; status: 'success' | 'ineligible' | 'error'; claimMonth: string; statutoryClaimAge: number; formulaA: string | null; formulaB: string | null; adjustmentRate: string | null; monthlyBenefitRealTwd: string | null }; laborPension: { monthlyBenefitNominalTwd?: string | null; status: 'monthly' | 'lumpSum' | 'lumpSumOnly' | 'error'; claimMonth: string; projectedAccountBalanceTwd: string | null; monthlyBenefitRealTwd: string | null; lumpSumBenefitTwd: string | null; lifeExpectancyYears: number | null }; errors: string[] }
 
 export function statutoryLaborInsuranceAge(birthDate: string): number {
   const year = Number(birthDate.slice(0, 4))
@@ -36,15 +36,17 @@ export function estimateLaborInsurance(input: LaborInsuranceInput) {
   const statutoryAge = statutoryLaborInsuranceAge(input.birthDate)
   const claimMonth = addMonths(input.birthDate, input.claimAge * 12)
   const salary = new Decimal(input.averageInsuredSalaryTwd)
-  const years = new Decimal(input.insuredYears)
-  if (salary.lt(0) || years.lt(0) || input.claimAge < statutoryAge - 5) return { status: 'error' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: null, formulaB: null, adjustmentRate: null, monthlyBenefitRealTwd: null }
-  if (years.lt(15)) return { status: 'ineligible' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: null, formulaB: null, adjustmentRate: null, monthlyBenefitRealTwd: null }
+  const additionalInsuredMonths = input.calculationBaseDate ? Math.max(0, monthsBetween(toMonth(input.calculationBaseDate), claimMonth)) : 0
+  const years = new Decimal(input.insuredYears).plus(new Decimal(additionalInsuredMonths).div(12))
+  const seniority = { projectedInsuredYears: years.toString(), additionalInsuredMonths }
+  if (salary.lt(0) || new Decimal(input.insuredYears).lt(0) || input.claimAge < statutoryAge - 5) return { ...seniority, status: 'error' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: null, formulaB: null, adjustmentRate: null, monthlyBenefitRealTwd: null }
+  if (years.lt(15)) return { ...seniority, status: 'ineligible' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: null, formulaB: null, adjustmentRate: null, monthlyBenefitRealTwd: null }
   const formulaA = salary.mul(years).mul('0.00775').plus(3000)
   const formulaB = salary.mul(years).mul('0.0155')
   const monthDifference = (input.claimAge - statutoryAge) * 12
   const adjustment = Decimal.max('-0.2', Decimal.min('0.2', new Decimal(monthDifference).div(12).mul('0.04')))
   const benefit = Decimal.max(formulaA, formulaB).mul(new Decimal(1).plus(adjustment)).toDecimalPlaces(0)
-  return { status: 'success' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: formulaA.toDecimalPlaces(0).toString(), formulaB: formulaB.toDecimalPlaces(0).toString(), adjustmentRate: adjustment.toString(), monthlyBenefitRealTwd: benefit.toString() }
+  return { ...seniority, status: 'success' as const, claimMonth, statutoryClaimAge: statutoryAge, formulaA: formulaA.toDecimalPlaces(0).toString(), formulaB: formulaB.toDecimalPlaces(0).toString(), adjustmentRate: adjustment.toString(), monthlyBenefitRealTwd: benefit.toString() }
 }
 
 export function estimateLaborPension(input: LaborPensionInput) {

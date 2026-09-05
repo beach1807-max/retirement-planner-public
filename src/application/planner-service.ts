@@ -130,7 +130,7 @@ export class PlannerService {
       const member = data.members.find((item) => item.id === record.memberId)
       if (!member || record.status !== 'provided') return { memberId: record.memberId, memberName: member?.name ?? '未知成員', status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate: null }
       const estimate = estimateRetirementSystem(
-        { birthDate: member.birthDate, averageInsuredSalaryTwd: record.laborInsurance.averageInsuredSalaryTwd, insuredYears: record.laborInsurance.insuredYears, claimAge: record.laborInsurance.claimAge },
+        { calculationBaseDate: data.calculationBaseDate, birthDate: member.birthDate, averageInsuredSalaryTwd: record.laborInsurance.averageInsuredSalaryTwd, insuredYears: record.laborInsurance.insuredYears, claimAge: record.laborInsurance.claimAge },
         { claimMode: record.laborPension.claimMode, birthDate: member.birthDate, calculationBaseDate: data.calculationBaseDate, currentAccountBalanceTwd: record.laborPension.currentAccountBalanceTwd, contributionYears: record.laborPension.contributionYears, monthlyContributionSalaryTwd: record.laborPension.monthlyContributionSalaryTwd, employerContributionRate: record.laborPension.employerContributionRate, voluntaryContributionRate: record.laborPension.voluntaryContributionRate, projectedAnnualReturnRate: record.laborPension.projectedAnnualReturnRate, annualInflationRate: data.assumptions.annualInflationRate, claimAge: record.laborPension.claimAge },
       )
       return { memberId: member.id, memberName: member.name, status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate }

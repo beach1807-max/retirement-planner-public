@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { estimateLaborInsurance, estimateLaborPension, statutoryLaborInsuranceAge, TAIWAN_LABOR_RULES_2026 } from './retirement-system'
 
 describe('臺灣勞保／勞退規則', () => {
+  it('以目前年資加計到請領的續保月數，已過請領月份不倒扣年資', () => {
+    const input = { birthDate: '1971-03-01', calculationBaseDate: '2026-09-01', averageInsuredSalaryTwd: '40000', insuredYears: '10', claimAge: 65 }
+    const result = estimateLaborInsurance(input)
+    expect(result.additionalInsuredMonths).toBe(114)
+    expect(result.projectedInsuredYears).toBe('19.5')
+    expect(result.status).toBe('success')
+    expect(result.formulaB).toBe('12090')
+    expect(estimateLaborInsurance({ ...input, calculationBaseDate: '2036-03-01' }).projectedInsuredYears).toBe('10')
+    expect(estimateLaborInsurance({ ...input, calculationBaseDate: '2037-03-01' }).additionalInsuredMonths).toBe(0)
+  })
   it('依出生年套用勞保法定請領年齡', () => {
     expect(statutoryLaborInsuranceAge('1957-01-01')).toBe(60)
     expect(statutoryLaborInsuranceAge('1960-01-01')).toBe(63)
