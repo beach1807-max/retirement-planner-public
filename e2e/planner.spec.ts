@@ -32,7 +32,7 @@ test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '儲存資產' }).click()
   await expect(page.getByText('緊急預備金')).toBeVisible()
   await page.getByRole('button', { name: '編輯 伴侶家庭可用資產' }).click()
-  await page.getByLabel('退休使用範圍').selectOption('personal')
+  await page.locator('select[name="retirementUsageScope"]').selectOption('personal')
   await page.getByRole('button', { name: '儲存資產' }).click()
   await expect(page.getByText('個人退休使用').first()).toBeVisible()
 })
@@ -43,7 +43,7 @@ test('共同持分須為 100%，並可建立固定日期與報酬設定投入', 
   await page.getByRole('button', { name: '新增資產' }).click()
   await page.getByLabel('資產名稱').fill('共同預備金')
   await page.getByLabel('目前價值（TWD）').fill('100000')
-  await page.getByLabel('所有權').selectOption('joint')
+  await page.locator('select[name="ownershipType"]').selectOption('joint')
   await page.getByLabel('主要規劃人 A 持分（%）').fill('60')
   await page.getByLabel('伴侶 B 持分（%）').fill('39')
   await page.getByRole('button', { name: '儲存資產' }).click()
@@ -100,6 +100,18 @@ test('Dashboard 顯示配置、固定期間三情境、購買力與次要資產�
   const projectionHeading = await page.getByRole('heading', { name: /35 年後約/ }).textContent()
   await page.getByRole('button', { name: '主要規劃人', exact: true }).click()
   await expect(page.getByRole('heading', { name: /35 年後約/ })).toHaveText(projectionHeading ?? '')
+})
+
+test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  const scenarioHelp = page.getByRole('button', { name: '說明：保守／穩健／樂觀情境' })
+  await scenarioHelp.click()
+  await expect(page.getByRole('dialog', { name: '保守／穩健／樂觀情境計算說明' })).toContainText('保守 = 原報酬率 − 2%')
+  await expect(scenarioHelp).toHaveAttribute('aria-expanded', 'true')
+  await page.screenshot({ path: testInfo.outputPath('calculation-help.png'), fullPage: false })
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: '保守／穩健／樂觀情境計算說明' })).toHaveCount(0)
 })
 
 test('可保存一次性支出並重新產生預測', async ({ page }) => {

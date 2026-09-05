@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Pencil, Plus, Trash2, Users, WalletCards } from 'lucide-react'
 import type { PlannerAsset, PlannerContribution, PlannerData } from '../application/planner-data'
 import { FinancialDataSections } from './FinancialDataSections'
+import { CalculationHelp } from './CalculationHelp'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -98,6 +99,7 @@ export function DataPage({ data, onChange }: Props) {
     <section className="panel">
       <div className="panel-heading"><div><h2><WalletCards size={21} /> 退休資產</h2><p>階段一介面以 TWD 輸入；共同資產持分須由你明確指定。</p></div><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button></div>
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
+        <div className="context-help-row" aria-label="資產欄位說明"><CalculationHelp label="配置分類" topic="assetAllocation" /><CalculationHelp label="所有權" topic="ownership" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="報酬設定" topic="annualReturn" /></div>
         <div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
           <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
@@ -123,6 +125,7 @@ export function DataPage({ data, onChange }: Props) {
     <section className="panel">
       <div className="panel-heading"><div><h2>每月可投入資金</h2><p>支援四種停止規則，並可投入指定資產或報酬設定。</p></div><button className="button secondary" onClick={() => editContribution()}><Plus size={18} /> 新增投入</button></div>
       {contributionEditor && <form key={contributionEditor} className="editor-form" onSubmit={saveContribution}>
+        <div className="context-help-row" aria-label="投入欄位說明"><CalculationHelp label="每月投入" topic="contribution" /><CalculationHelp label="停止規則" topic="contributionEnd" /></div>
         <div className="form-grid three">
           <label>來源成員<select name="sourceMemberId" defaultValue={editedContribution?.sourceMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
           <label>每月金額（TWD）<input name="amount" type="number" min="0" step="0.01" required defaultValue={editedContribution?.amount.amount} /></label>
