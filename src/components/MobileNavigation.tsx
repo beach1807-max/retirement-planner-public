@@ -16,7 +16,7 @@ export function MobileNavigation<T extends string>({ items, page, onNavigate }: 
   const extraActive = items.slice(4).some((item) => item.id === page)
   return <>
     <nav className="bottom-nav" aria-label="行動版主要功能">
-      {items.slice(0, 4).map(({ id, label, icon: Icon }, index) => <button key={id} aria-label={label} aria-current={page === id ? 'page' : undefined} className={page === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon size={22} aria-hidden="true" /><span>{['預測', '家庭資料', '勞保勞退', '投資組合'][index]}</span></button>)}
+      {items.slice(0, 4).map(({ id, label, icon: Icon }) => <button key={id} aria-label={label} aria-current={page === id ? 'page' : undefined} className={page === id ? 'active' : ''} onClick={() => onNavigate(id)}><Icon size={22} aria-hidden="true" /><span>{label === '投資與退休預測' ? '預測' : label}</span></button>)}
       <button aria-label="更多功能" aria-haspopup="dialog" aria-expanded={open} className={extraActive ? 'active' : ''} onClick={() => setOpen(true)}><MoreHorizontal size={22} aria-hidden="true" /><span>更多</span></button>
     </nav>
     <dialog className="mobile-menu" ref={dialog} aria-labelledby="mobile-menu-title" onCancel={() => setOpen(false)} onClose={() => setOpen(false)} onClick={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>

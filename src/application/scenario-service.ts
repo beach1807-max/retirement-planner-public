@@ -1,13 +1,14 @@
 import Decimal from 'decimal.js'
 import { sha256 } from '../domain/canonical'
+import { monthsBetween } from '../domain/date'
 import type { ProjectionResult } from '../domain/models'
 import type { PlannerData, PlannerScenario } from './planner-data'
 import { validatePlannerData } from './planner-service'
 
 type Years = 10 | 15 | 20 | 25 | 30 | 35
-interface Engines { project(data: PlannerData): Promise<ProjectionResult> }
+interface Engines { project(data: PlannerData): Promise<ProjectionResult>; retirementSystems(data: PlannerData): Array<{ memberId: string; memberName: string; estimate: { laborInsurance: { monthlyBenefitRealTwd?: string | null }; laborPension: { projectedAccountBalanceTwd?: string | null } } | null }> }
 export interface ScenarioMilestoneResult { years: Years; totalAssetsNominal: string; totalAssetsReal: string; deltaNominalVsBaseline: string; deltaRealVsBaseline: string }
-export interface ScenarioResult { scenarioId: string; name: string; inputHash: string; status: 'available' | 'unavailable'; basis: 'conservative' | 'balanced' | 'optimistic'; milestones: ScenarioMilestoneResult[]; contractVersion: string; ruleVersion: string; warnings: string[] }
+export interface ScenarioResult { scenarioId: string; name: string; inputHash: string; status: 'available' | 'unavailable'; basis: 'conservative' | 'balanced' | 'optimistic'; milestones: ScenarioMilestoneResult[]; plannedRetirementMonth?: string; plannedRetirementAgeMonths?: number; retirementMonthDeltaVsBaseline?: number; laborSystems: Array<{ memberId: string; memberName: string; laborInsuranceMonthlyRealTwd?: string; laborPensionClaimAmountTwd?: string }>; contractVersion: string; ruleVersion: string; warnings: string[] }
 
 function applyRebalance(data: PlannerData, targetWeights: NonNullable<PlannerScenario['overrides']['rebalance']>['targetWeights']) {
   const portfolio = data.portfolios[0]
@@ -70,12 +71,17 @@ export class ScenarioService {
   async run(data: PlannerData, scenario: PlannerScenario, basis: ScenarioResult['basis'] = 'balanced'): Promise<ScenarioResult> {
     const inputHash = await sha256({ baseDataUpdatedAt: scenario.baseDataUpdatedAt, contractVersion: 'projection-contract-v0.2', ruleVersion: scenario.ruleVersion, overrides: scenario.overrides, basis })
     try {
-      const projection = await this.engines.project(applyScenario(data, scenario))
-      return { scenarioId: scenario.id, name: scenario.name, inputHash, status: 'available', basis, milestones: milestones(projection, basis), contractVersion: projection.contractVersion, ruleVersion: scenario.ruleVersion, warnings: projection.warnings.map((item) => item.message) }
+      const applied = applyScenario(data, scenario)
+      const projection = await this.engines.project(applied)
+      const primary = applied.members.find((member) => member.id === applied.household.primaryMemberId)
+      const baselinePrimary = data.members.find((member) => member.id === data.household.primaryMemberId)
+      const plannedRetirementMonth = primary?.plannedRetirementMonth
+      const baselineMonth = baselinePrimary?.plannedRetirementMonth
+      return { scenarioId: scenario.id, name: scenario.name, inputHash, status: 'available', basis, milestones: milestones(projection, basis), plannedRetirementMonth, plannedRetirementAgeMonths: primary && plannedRetirementMonth ? monthsBetween(primary.birthDate, plannedRetirementMonth) : undefined, retirementMonthDeltaVsBaseline: plannedRetirementMonth && baselineMonth ? monthsBetween(baselineMonth, plannedRetirementMonth) : undefined, laborSystems: this.engines.retirementSystems(applied).map((item) => ({ memberId: item.memberId, memberName: item.memberName, laborInsuranceMonthlyRealTwd: item.estimate?.laborInsurance.monthlyBenefitRealTwd ?? undefined, laborPensionClaimAmountTwd: item.estimate?.laborPension.projectedAccountBalanceTwd ?? undefined })), contractVersion: projection.contractVersion, ruleVersion: scenario.ruleVersion, warnings: projection.warnings.map((item) => item.message) }
     } catch (error) {
       const code = error instanceof Error ? error.message : 'UNKNOWN'
       const warning = code === 'LABOR_PENSION_DATA_REQUIRED' ? '需先提供該成員的勞退資料，才能試算制度覆寫。' : code === 'SCENARIO_REBALANCE_CLASS_MISSING_ASSET' ? 'SCENARIO_REBALANCE_CLASS_MISSING_ASSET：目標配置需要目前投資組合沒有的資產類別。' : '情境資料無法完成試算。'
-      return { scenarioId: scenario.id, name: scenario.name, inputHash, status: 'unavailable', basis, milestones: [], contractVersion: 'projection-contract-v0.2', ruleVersion: scenario.ruleVersion, warnings: [warning] }
+      return { scenarioId: scenario.id, name: scenario.name, inputHash, status: 'unavailable', basis, milestones: [], laborSystems: [], contractVersion: 'projection-contract-v0.2', ruleVersion: scenario.ruleVersion, warnings: [warning] }
     }
   }
   async compare(data: PlannerData, basis: ScenarioResult['basis'] = 'balanced'): Promise<ScenarioResult[]> {

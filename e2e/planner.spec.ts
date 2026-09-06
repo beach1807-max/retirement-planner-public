@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 async function navigateTo(page: Page, label: string, isMobile: boolean) {
-  if (isMobile && ['預測設定', '資料與備份', '情境比較', '行情更新'].includes(label)) {
+  if (isMobile && ['預測設定', '資料與備份', '行情更新'].includes(label)) {
     await page.getByRole('button', { name: '更多功能' }).click()
     await page.getByRole('dialog').getByRole('button', { name: label }).click()
   } else {
@@ -51,8 +51,8 @@ test('快速試算可儲存並在重新開啟後保留資料', async ({ page }) 
 
 test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  if (isMobile) await page.getByRole('button', { name: '家庭資料' }).click()
-  else await page.getByRole('button', { name: '家庭資料' }).click()
+  if (isMobile) await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  else await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await page.getByRole('button', { name: '新增資產' }).click()
   await page.getByLabel('資產名稱').fill('緊急預備金')
   await page.getByLabel('目前價值（TWD）').fill('300000')
@@ -67,7 +67,7 @@ test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
 
 test('共同持分須為 100%，並可建立固定日期與報酬設定投入', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await page.getByRole('button', { name: '新增資產' }).click()
   await page.getByLabel('資產名稱').fill('共同預備金')
   await page.getByLabel('目前價值（TWD）').fill('100000')
@@ -89,30 +89,30 @@ test('共同持分須為 100%，並可建立固定日期與報酬設定投入', 
   await expect(page.getByText(/2030-12 停止/)).toBeVisible()
 })
 
-test('資產情境欄位按需展開，保存後可還原為預設', async ({ page }, testInfo) => {
+test('資產可自訂情境報酬並重新套用系統預設', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
   await expect(page.getByLabel('保守年報酬（%）')).toHaveCount(0)
-  await page.getByLabel('這筆資產自行設定三種情境').check()
+  await page.getByLabel('自訂此資產的三種情境報酬').check()
   await page.getByLabel('保守年報酬（%）').fill('-1')
   await page.getByLabel('穩健年報酬（%）').fill('0')
   await page.getByLabel('比較樂觀年報酬（%）').fill('0.5')
   await page.screenshot({ path: testInfo.outputPath('asset-rates.png'), fullPage: true })
   await page.getByRole('button', { name: '儲存資產', exact: true }).click()
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
-  await expect(page.getByLabel('這筆資產自行設定三種情境')).toBeChecked()
+  await expect(page.getByLabel('自訂此資產的三種情境報酬')).toBeChecked()
   await expect(page.getByLabel('比較樂觀年報酬（%）')).toHaveValue('0.5')
-  await page.getByLabel('這筆資產自行設定三種情境').uncheck()
+  await page.getByLabel('使用系統預設（stock）').check()
   await page.getByRole('button', { name: '儲存資產', exact: true }).click()
   await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
-  await expect(page.getByLabel('這筆資產自行設定三種情境')).not.toBeChecked()
+  await expect(page.getByLabel('使用系統預設（stock）')).toBeChecked()
 })
 
 test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資料', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await page.getByRole('button', { name: '收入', exact: true }).click()
   await page.getByLabel('名稱').fill('固定兼職收入')
   await page.getByLabel('每月金額（TWD）').fill('12000')
@@ -151,7 +151,7 @@ test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家�
   }
   if (!isMobile) await expect(page.getByRole('columnheader', { name: /比較樂觀/ })).toBeVisible()
   await expect(page.getByText('家庭完整資產摘要')).toHaveCount(0)
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await expect(page.getByText('家庭完整資產摘要')).toBeVisible()
 })
 
@@ -218,13 +218,14 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
 
 test('可建立、比較與刪除不修改正式資料的情境', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await navigateTo(page, '情境比較', isMobile)
-  await expect(page.getByRole('row', { name: /目前投入計畫/ })).toBeVisible({ timeout: 15_000 })
+  await navigateTo(page, '情境模擬', isMobile)
+  await expect(page.getByRole('row', { name: /目前方案/ })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('row', { name: /勞退自提 6%/ })).toBeVisible()
   await page.getByLabel('方案名稱').fill('額外投入測試')
   await page.getByLabel('每月額外投入（TWD）').fill('5000')
   await page.getByLabel('每月額外投入（TWD）').press('Enter')
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: '儲存此情境' }).click()
   const deleteScenario = page.getByRole('button', { name: '刪除方案 額外投入測試' })
   await deleteScenario.focus()
   await deleteScenario.press('Enter')
@@ -256,7 +257,7 @@ test('視覺稽核截圖', async ({ page, isMobile }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true })
-  await page.getByRole('button', { name: '家庭資料' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
   await expect(page.getByRole('heading', { name: '家庭成員' })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('financial-data.png'), fullPage: true })
   await page.getByRole('button', { name: '新增資產' }).click()
@@ -316,7 +317,7 @@ test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => 
   await page.setViewportSize({ width: 844, height: 390 })
   await page.evaluate(() => { document.documentElement.style.fontSize = '20px' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-  await expect(page.getByRole('button', { name: '家庭資料' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '家庭資料', exact: true })).toBeVisible()
 })
 
 test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context }) => {
@@ -339,3 +340,4 @@ test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, cont
   await expect(page.getByText('我的退休規劃', { exact: true })).toBeVisible()
   await context.setOffline(false)
 })
+

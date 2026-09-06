@@ -29,10 +29,10 @@ const BackupPage = lazy(() => import('./components/BackupPage').then((module) =>
 
 const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'dashboard', label: '投資與退休預測', icon: ChartNoAxesCombined },
+  { id: 'scenarios', label: '情境模擬', icon: FlaskConical },
   { id: 'data', label: '家庭資料', icon: Database },
   { id: 'retirementSystems', label: '退休制度', icon: Scale },
   { id: 'portfolio', label: '投資組合', icon: PieChart },
-  { id: 'scenarios', label: '情境比較', icon: FlaskConical },
   { id: 'market', label: '行情更新', icon: RefreshCw },
   { id: 'settings', label: '預測設定', icon: Settings },
   { id: 'backup', label: '資料與備份', icon: ArchiveRestore },

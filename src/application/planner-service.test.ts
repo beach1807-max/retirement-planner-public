@@ -60,7 +60,7 @@ describe('Planner Service 與遷移', () => {
     expect(first.monthlyTimeline).toEqual(second.monthlyTimeline)
   })
 
-  it('系統預設報酬會隨設定更新，自訂報酬則維持不變', async () => {
+  it('修改系統預設不會改變既有資產已儲存的情境報酬', async () => {
     const data = createDemoData('2026-09-01')
     data.assets[0].scenarioRateOrigin = { type: 'systemPreset', presetKey: 'stock' }
     data.assets[0].scenarioRates = { conservative: '0', balanced: '0', optimistic: '0' }
@@ -72,7 +72,7 @@ describe('Planner Service 與遷移', () => {
     stockPreset.scenarioRates.balanced = '0.12'
     stockPreset.scenarioRates.optimistic = '0.14'
     const after = await service.project(data)
-    expect(after.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal).not.toBe(before.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal)
+    expect(after.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal).toBe(before.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal)
     expect(data.assets[1].scenarioRates?.balanced).toBe('0.06')
   })
 
