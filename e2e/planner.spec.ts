@@ -262,7 +262,7 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
 test('可建立、比較與刪除不修改正式資料的情境', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await navigateTo(page, '情境模擬', isMobile)
-  await expect(page.getByRole('row', { name: /目前方案/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.scenario-table tbody tr').first()).toContainText('目前方案', { timeout: 15_000 })
   await expect(page.getByRole('row', { name: /勞退自提 6%/ })).toBeVisible()
   await page.getByLabel('方案名稱').fill('額外投入測試')
   await page.getByLabel('每月額外投入（TWD）').fill('5000')
