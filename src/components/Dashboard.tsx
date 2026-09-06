@@ -2,19 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Landmark, PieChart, TrendingUp } from 'lucide-react'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PlannerData } from '../application/planner-data'
-import type { PlannerService, ProjectionOptions, RetirementSystemView } from '../application/planner-service'
+import type { FinancialOverview, PlannerService, ProjectionOptions, RetirementSystemView } from '../application/planner-service'
 import type { ProjectionResult } from '../domain/models'
 import type { RebalancingResult } from '../domain/rebalancing-engine'
 import { CalculationHelp } from './CalculationHelp'
 import { PlanSummary } from './PlanSummary'
 
-interface Props { service: PlannerService; data: PlannerData; systemEstimates: RetirementSystemView[]; portfolio: RebalancingResult | null; projection: ProjectionResult | null; calculating: boolean; onContinueFullPlan: () => void }
+interface Props { service: PlannerService; data: PlannerData; systemEstimates: RetirementSystemView[]; portfolio: RebalancingResult | null; projection: ProjectionResult | null; calculating: boolean; financialOverview: FinancialOverview; onContinueFullPlan: () => void; onOpenData: () => void }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 const compactCurrency = (value: number) => new Intl.NumberFormat('zh-TW', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 const allocationLabels: Record<string, string> = { stock: '股票', bond: '債券', moneyMarket: '貨幣市場', cash: '現金', other: '其他' }
 const scenarioColors = { conservative: '#8a6a24', balanced: '#1c6b4a', optimistic: '#3f6fa8', custom: '#8057a3' }
 
-export function Dashboard({ data, systemEstimates, portfolio, projection: initialProjection, calculating, service, onContinueFullPlan }: Props) {
+export function Dashboard({ data, systemEstimates, portfolio, projection: initialProjection, calculating, service, financialOverview, onContinueFullPlan, onOpenData }: Props) {
   const [years, setYears] = useState(10)
   const [showAll, setShowAll] = useState(false)
   const [scope, setScope] = useState('all')
@@ -54,6 +54,8 @@ export function Dashboard({ data, systemEstimates, portfolio, projection: initia
       <p className="muted">納入資產：{data.assets.filter((asset) => data.portfolios[0]?.assetIds.includes(asset.id)).map((asset) => asset.name).join('、') || '尚未選取，請至投資組合設定'}</p>
       {portfolio?.allocations.length ? <div className="allocation-summary">{portfolio.allocations.map((item) => <article key={item.assetClass}><div><span>{allocationLabels[item.assetClass] ?? item.assetClass}</span><strong>{(Number(item.currentWeight) * 100).toFixed(1)}%</strong></div><div className="allocation-bar" aria-label={`${allocationLabels[item.assetClass] ?? item.assetClass} ${(Number(item.currentWeight) * 100).toFixed(1)}%`}><span style={{ width: `${Number(item.currentWeight) * 100}%` }} /></div><small>{currency.format(Number(item.valueTwd))}</small></article>)}</div> : <p className="muted">請至投資組合選取要納入分析與預測的資產。</p>}
     </section>
+
+    <section className="panel"><div className="panel-heading"><div><h3>財務總覽</h3><p>以目前已提供的家庭收支、負債與帳戶資料彙整；未提供的資料不會被當成 0。</p></div><button className="button secondary" type="button" onClick={onOpenData}>補齊家庭資料</button></div><div className="cashflow-grid">{([['每月收入', financialOverview.household.monthlyIncomeTwd], ['每月支出', financialOverview.household.monthlyExpenseTwd], ['每月債務還款', financialOverview.household.monthlyDebtPaymentTwd], ['每月投入', financialOverview.household.monthlyContributionTwd], ['未分配現金流', financialOverview.household.unallocatedTwd]] as const).map(([label, value]) => <article key={label}><span>{label}</span><strong>{value === undefined ? '尚未提供' : currency.format(Number(value))}</strong></article>)}</div><div className="cashflow-grid"><article><span>總資產</span><strong>{currency.format(Number(financialOverview.assets.totalTwd))}</strong></article><article><span>總負債</span><strong>{currency.format(Number(financialOverview.assets.liabilitiesTwd))}</strong></article><article><span>淨資產</span><strong>{currency.format(Number(financialOverview.assets.netWorthTwd))}</strong></article></div>{financialOverview.accounts.length > 0 && <div className="data-list">{financialOverview.accounts.slice(0, 4).map((account) => <article key={account.id}><div><strong>{account.name}</strong><p>{account.assetCount} 筆資產</p></div><strong>{account.totalTwd === undefined ? '尚未提供' : currency.format(Number(account.totalTwd))}</strong></article>)}</div>}</section>
 
 
 

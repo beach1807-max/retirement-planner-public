@@ -60,15 +60,33 @@ const v08DataSchema = v07DataSchema.omit({ schemaVersion: true, assets: true, po
   assets: z.array(z.object({ ...v03AssetBase, assetType: v08AssetType, allocationClass: v08AllocationClass.optional(), currentValue: moneySchema, ...timestamp })),
   portfolios: z.array(z.object({ id: z.string(), householdId: z.string(), name: z.string(), scope: z.literal('household'), assetIds: z.array(z.string()), targets: z.array(z.object({ assetClass: v08AllocationClass, targetWeight: z.string() })), driftThreshold: z.string(), ...timestamp })),
 })
+const v09ScenarioSchema = z.object({
+  id: z.string(), householdId: z.string(), name: z.string(), version: z.literal('scenario-v0.2'), baseDataUpdatedAt: z.string(), contractVersion: z.literal('calculation-contract-v0.1'), ruleVersion: z.literal('tw-labor-rules-2026-08-20'),
+  overrides: z.object({
+    memberRetirement: z.array(z.object({ memberId: z.string(), plannedRetirementMonth: z.string() })).optional(),
+    contributionOverrides: z.array(z.object({ contributionId: z.string(), amountTwd: z.string().optional(), startDate: z.string().optional(), endRule: z.enum(['ownerRetirement', 'primaryRetirement', 'fixedDate', 'planEnd']).optional(), endDate: z.string().optional() })).optional(),
+    additionalContributions: z.array(z.object({ id: z.string(), sourceMemberId: z.string(), amountTwd: z.string(), startDate: z.string(), endRule: z.enum(['ownerRetirement', 'primaryRetirement', 'fixedDate', 'planEnd']), endDate: z.string().optional(), destinationAssetId: z.string().optional(), returnProfileId: z.string().optional() })).optional(),
+    assetRates: z.array(z.object({ assetId: z.string(), scenarioRates: z.object({ conservative: z.string(), balanced: z.string(), optimistic: z.string() }) })).optional(),
+    retirementSystems: z.array(z.object({ memberId: z.string(), laborInsuranceClaimAge: z.number().optional(), laborPensionVoluntaryRate: z.string().optional(), laborPensionClaimAge: z.number().optional(), laborPensionClaimMode: z.enum(['lumpSum', 'monthly']).optional() })).optional(),
+    annualInflationRate: z.string().optional(),
+    rebalance: z.object({ targetWeights: z.array(z.object({ assetClass: v08AllocationClass, targetWeight: z.string() })) }).optional(),
+  }), ...timestamp,
+})
+const v09DataSchema = v08DataSchema.omit({ schemaVersion: true, assumptions: true, assets: true, scenarios: true }).extend({
+  schemaVersion: z.literal('planner-data-v0.9'),
+  assumptions: z.object({ annualInflationRate: z.string(), returnProfiles: z.array(z.object({ id: z.string(), name: z.string(), annualReturnRate: z.string() })), assetReturnPresets: z.array(z.object({ key: z.enum(['cash', 'timeDeposit', 'moneyMarket', 'bond', 'stock', 'other']), label: z.string(), scenarioRates: z.object({ conservative: z.string(), balanced: z.string(), optimistic: z.string() }) })) }),
+  assets: z.array(z.object({ ...v03AssetBase, assetType: v08AssetType, allocationClass: v08AllocationClass.optional(), scenarioRateOrigin: z.object({ type: z.enum(['systemPreset', 'custom']), presetKey: z.enum(['cash', 'timeDeposit', 'moneyMarket', 'bond', 'stock', 'other']).optional() }).optional(), currentValue: moneySchema, ...timestamp })),
+  scenarios: z.array(v09ScenarioSchema),
+})
 
 export function serializeBackup(data: PlannerData): string {
-  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.8', exportedAt: new Date().toISOString(), data }, null, 2)
+  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.9', exportedAt: new Date().toISOString(), data }, null, 2)
 }
 
 export function parseBackup(value: string): PlannerData {
   const parsed = JSON.parse(value) as { backupVersion?: string; data?: unknown }
-  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7', 'retirement-planner-backup-v0.8'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
-  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.7' ? v07DataSchema.parse(parsed.data) : v08DataSchema.parse(parsed.data)
+  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7', 'retirement-planner-backup-v0.8', 'retirement-planner-backup-v0.9'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
+  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.7' ? v07DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.8' ? v08DataSchema.parse(parsed.data) : v09DataSchema.parse(parsed.data)
   const migrated = migratePlannerData(source)
   validatePlannerData(migrated)
   return migrated

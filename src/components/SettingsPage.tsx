@@ -14,6 +14,15 @@ export function SettingsPage({ data, onChange }: Props) {
     const form = new FormData(event.currentTarget)
     const annualReturnRate = (Number(form.get('annualReturnPercent')) / 100).toString()
     const annualInflationRate = (Number(form.get('annualInflationPercent')) / 100).toString()
+    const assetReturnPresets = data.assumptions.assetReturnPresets.map((preset) => ({
+      ...preset,
+      scenarioRates: {
+        conservative: (Number(form.get(`preset-${preset.key}-conservative`)) / 100).toString(),
+        balanced: (Number(form.get(`preset-${preset.key}-balanced`)) / 100).toString(),
+        optimistic: (Number(form.get(`preset-${preset.key}-optimistic`)) / 100).toString(),
+      },
+    }))
+    if (assetReturnPresets.some((preset) => Number(preset.scenarioRates.conservative) > Number(preset.scenarioRates.balanced) || Number(preset.scenarioRates.balanced) > Number(preset.scenarioRates.optimistic))) return
     const now = new Date().toISOString()
     const members = data.members.map((member) => ({
       ...member,
@@ -41,6 +50,7 @@ export function SettingsPage({ data, onChange }: Props) {
       assumptions: {
         ...data.assumptions,
         annualInflationRate,
+        assetReturnPresets,
         returnProfiles: data.assumptions.returnProfiles.map((profile) => profile.id === 'balanced' ? { ...profile, name: `基準 ${Number(form.get('annualReturnPercent'))}%`, annualReturnRate } : profile),
       },
     })
@@ -55,6 +65,7 @@ export function SettingsPage({ data, onChange }: Props) {
         <div className="panel-heading"><div><h2>預測設定</h2><p>調整未來累積與購買力的假設。相同本金與投入計畫，會同時比較三種報酬情境。</p></div></div>
         <form className="settings-form" onSubmit={submit}>
           <fieldset><legend>報酬與物價假設</legend><div className="context-help-row"><CalculationHelp label="預估年報酬率" topic="annualReturn" /><CalculationHelp label="年通膨率" topic="inflation" /></div><div className="form-grid two"><label>預估年報酬率（%）<input name="annualReturnPercent" type="number" min="-99" max="100" step="0.1" required defaultValue={Number(balanced.annualReturnRate) * 100} /><small>使用基準報酬設定的投資套用此值；其他報酬設定與勞退另計。</small></label><label>年通膨率（%）<input name="annualInflationPercent" type="number" min="-99" max="100" step="0.1" required defaultValue={Number(data.assumptions.annualInflationRate) * 100} /></label></div></fieldset>
+          <fieldset><legend>資產類別情境報酬預設</legend><p className="muted">只會影響日後選擇「使用系統預設」的資產；已自訂的資產不會被改寫。</p>{data.assumptions.assetReturnPresets.map((preset) => <div className="form-grid four" key={preset.key}><strong>{preset.label}</strong>{([['conservative', '保守'], ['balanced', '穩健'], ['optimistic', '樂觀']] as const).map(([scenario, label]) => <label key={scenario}>{label}（%）<input name={`preset-${preset.key}-${scenario}`} type="number" min="-99" max="100" step="0.1" required defaultValue={Number(preset.scenarioRates[scenario]) * 100} /></label>)}</div>)}</fieldset>
           <label>計算基準日<input name="calculationBaseDate" type="date" required defaultValue={data.calculationBaseDate} /></label>
           <fieldset><legend>依成員日期停止投入（選填）</legend><p className="muted">只有選擇「成員退休時停止」的每月投入會使用這些日期。留白時，該筆投入會持續計算至 35 年後；也可到家庭資料為投入指定固定停止月份。</p><div className="form-grid two">{data.members.filter((member) => member.role !== 'other').map((member) => <label key={member.id}>{member.role === 'primary' ? '主要規劃人' : '伴侶'}預計退休月份<input name={`plannedRetirementMonth-${member.id}`} type="month" min={data.calculationBaseDate.slice(0, 7)} defaultValue={member.plannedRetirementMonth} /></label>)}</div></fieldset>
           <details className="advanced-settings"><summary>舊版退休試算資料（選填）</summary><p className="muted">下列生活費、準備金、遺產與支出資料保留供舊版試算使用，不會從首頁未來資產預估中扣除。</p>

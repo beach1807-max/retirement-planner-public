@@ -85,6 +85,7 @@ export interface RetirementPlan {
 export interface Assumptions {
   annualInflationRate: string
   returnProfiles: ReturnProfile[]
+  assetReturnPresets: AssetReturnPreset[]
 }
 
 export interface CalculationInput {
@@ -149,6 +150,14 @@ export interface CalculationResult {
 }
 
 export type AssetScenarioRates = { conservative: string; balanced: string; optimistic: string }
+
+export type AssetReturnPresetKey = 'cash' | 'timeDeposit' | 'moneyMarket' | 'bond' | 'stock' | 'other'
+
+export interface AssetReturnPreset {
+  key: AssetReturnPresetKey
+  label: string
+  scenarioRates: AssetScenarioRates
+}
 
 export interface ProjectionAsset {
   scenarioRates?: AssetScenarioRates

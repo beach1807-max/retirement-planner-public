@@ -160,7 +160,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} onContinueFullPlan={() => setPage('data')} />}
+          {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} financialOverview={plannerService.financialOverview(activeData)} onContinueFullPlan={() => setPage('data')} onOpenData={() => setPage('data')} />}
           {page === 'data' && <DataPage data={activeData} summary={plannerService.dashboard(activeData, 'household')} onChange={saveActiveData} />}
           {page === 'settings' && <SettingsPage data={activeData} onChange={saveActiveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={activeData} estimates={plannerService.retirementSystems(activeData)} onChange={saveActiveData} />}

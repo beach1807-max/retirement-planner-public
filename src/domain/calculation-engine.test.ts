@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js'
 import { describe, expect, it } from 'vitest'
 import { calculateRetirement } from './calculation-engine'
+import { cloneDefaultAssetReturnPresets } from './default-return-presets'
 import type { CalculationInput } from './models'
 
 function fixture(): CalculationInput {
@@ -24,7 +25,7 @@ function fixture(): CalculationInput {
       earliestRetirementMonth: '2026-01', retirementExpenseMonthlyRealTwd: '10000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0',
       defaultReturnProfileId: 'zero', oneTimeExpenses: [],
     },
-    assumptions: { annualInflationRate: '0', returnProfiles: [{ id: 'zero', name: '零報酬', annualReturnRate: '0' }] },
+    assumptions: { annualInflationRate: '0', returnProfiles: [{ id: 'zero', name: '零報酬', annualReturnRate: '0' }], assetReturnPresets: cloneDefaultAssetReturnPresets() },
     ruleVersion: 'rules-none-v0.1',
   }
 }
