@@ -68,7 +68,9 @@ describe('Planner Service 與遷移', () => {
     data.assets[1].scenarioRates = { conservative: '0.04', balanced: '0.06', optimistic: '0.08' }
     const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
     const before = await service.project(data)
-    data.assumptions.assetReturnPresets.find((preset) => preset.key === 'stock')!.scenarioRates.balanced = '0.12'
+    const stockPreset = data.assumptions.assetReturnPresets.find((preset) => preset.key === 'stock')!
+    stockPreset.scenarioRates.balanced = '0.12'
+    stockPreset.scenarioRates.optimistic = '0.14'
     const after = await service.project(data)
     expect(after.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal).not.toBe(before.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal)
     expect(data.assets[1].scenarioRates?.balanced).toBe('0.06')
