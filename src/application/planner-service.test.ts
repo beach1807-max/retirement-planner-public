@@ -85,10 +85,29 @@ describe('Planner Service 與遷移', () => {
     expect(overview.household.unallocatedTwd).toBeUndefined()
   })
 
+  it('家庭財務概況以每筆家庭收支計一次，並算出可支配餘額', () => {
+    const data = createDemoData('2026-09-01')
+    data.incomes = [{ ...data.incomes[0], monthlyAmount: { amount: '100000', currency: 'TWD' }, ownershipType: 'joint', ownerMemberId: undefined, owners: [{ memberId: data.members[0].id, share: '0.5' }, { memberId: data.members[1].id, share: '0.5' }] }]
+    data.expenses = [{ ...data.expenses[0], monthlyAmount: { amount: '40000', currency: 'TWD' } }]
+    data.liabilities = [{ ...data.liabilities[0], monthlyPayment: { amount: '20000', currency: 'TWD' } }]
+    data.contributions = [{ ...data.contributions[0], amount: { amount: '15000', currency: 'TWD' } }]
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    expect(service.financialOverview(data).household).toMatchObject({ monthlyIncomeTwd: '100000.00', monthlyExpenseTwd: '40000.00', monthlyDebtPaymentTwd: '20000.00', monthlyContributionTwd: '15000.00', unallocatedTwd: '25000.00' })
+  })
+
   it.each([['0.98'], ['1']])('共同持分合計不等於 100%%（第一位 %s）會被拒絕', (share) => {
     const data = createDemoData('2026-09-01')
     data.assets[0] = { ...data.assets[0], ownershipType: 'joint', ownerMemberId: undefined, owners: [{ memberId: data.members[0].id, share }, { memberId: data.members[1].id, share: '0.01' }] }
     expect(() => validatePlannerData(data)).toThrow('INVALID_JOINT_SHARE_TOTAL')
+  })
+
+  it('家庭僅允許一位主要規劃人與一位伴侶', () => {
+    const data = createDemoData('2026-09-01')
+    data.members.push({ ...data.members[1], id: 'second-partner', name: '第二位伴侶' })
+    expect(() => validatePlannerData(data)).toThrow('INVALID_HOUSEHOLD_MEMBERS')
+    data.members = data.members.slice(0, 2)
+    data.members[1].role = 'primary'
+    expect(() => validatePlannerData(data)).toThrow('INVALID_HOUSEHOLD_MEMBERS')
   })
 
   it('共同持分 100% 可依個人範圍正確摘要', () => {

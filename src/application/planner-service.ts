@@ -81,7 +81,11 @@ export function validatePlannerData(data: PlannerData): void {
   for (const scenario of data.scenarios) {
     if (scenario.householdId !== data.household.id || scenario.version !== 'scenario-v0.2') throw new Error('INVALID_SCENARIO')
     if (scenario.overrides.memberRetirement?.some((item) => !memberIds.has(item.memberId))) throw new Error('INVALID_SCENARIO_MEMBER')
-    if (scenario.overrides.contributionOverrides?.some((item) => !data.contributions.some((contribution) => contribution.id === item.contributionId) || (item.amountTwd !== undefined && (!new Decimal(item.amountTwd).isFinite() || new Decimal(item.amountTwd).lt(0))) || (item.endRule === 'fixedDate' && (!item.endDate || !item.startDate || item.endDate < item.startDate.slice(0, 7))))) throw new Error('INVALID_SCENARIO_CONTRIBUTION')
+    if (scenario.overrides.contributionOverrides?.some((item) => {
+      const contribution = data.contributions.find((candidate) => candidate.id === item.contributionId)
+      const startDate = item.startDate ?? contribution?.startDate
+      return !contribution || (item.amountTwd !== undefined && (!new Decimal(item.amountTwd).isFinite() || new Decimal(item.amountTwd).lt(0))) || (item.endRule === 'fixedDate' && (!item.endDate || !startDate || item.endDate < startDate.slice(0, 7)))
+    })) throw new Error('INVALID_SCENARIO_CONTRIBUTION')
     if (scenario.overrides.additionalContributions?.some((item) => !memberIds.has(item.sourceMemberId) || !new Decimal(item.amountTwd).isFinite() || new Decimal(item.amountTwd).lt(0) || Boolean(item.destinationAssetId) === Boolean(item.returnProfileId))) throw new Error('INVALID_SCENARIO_CONTRIBUTION')
     if (scenario.overrides.assetRates?.some((item) => {
       const rates = [item.scenarioRates.conservative, item.scenarioRates.balanced, item.scenarioRates.optimistic].map((rate) => new Decimal(rate))
