@@ -155,6 +155,36 @@ test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家�
   await expect(page.getByText('家庭完整資產摘要')).toBeVisible()
 })
 
+test('可管理家庭成員並阻止不安全刪除', async ({ page }) => {
+  await page.getByRole('button', { name: '快速試算我的未來資產' }).click()
+  await page.getByLabel('出生日期').fill('1990-01-01')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('目前可投資資產總額（TWD）').fill('1000000')
+  await page.getByLabel('每月預計投入金額（TWD）').fill('10000')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('股票（%）').fill('100')
+  await page.getByLabel('債券（%）').fill('0')
+  await page.getByLabel('貨幣市場（%）').fill('0')
+  await page.getByLabel('現金（%）').fill('0')
+  await page.getByLabel('其他（%）').fill('0')
+  await page.getByRole('button', { name: '開始查看結果' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  await page.getByRole('button', { name: '新增成員' }).click()
+  await page.getByLabel('姓名').fill('小林伴侶')
+  await page.getByLabel('角色').selectOption('partner')
+  await page.getByLabel('出生日期').fill('1992-01-01')
+  await page.getByRole('button', { name: '儲存成員' }).click()
+  await expect(page.getByText('小林伴侶')).toBeVisible()
+  await page.getByRole('button', { name: '新增成員' }).click()
+  await page.getByLabel('姓名').fill('第二位伴侶')
+  await expect(page.getByLabel('角色').locator('option[value="partner"]')).toHaveJSProperty('disabled', true)
+  await page.getByLabel('角色').selectOption('other')
+  await page.getByLabel('出生日期').fill('2000-01-01')
+  await page.getByRole('button', { name: '儲存成員' }).click()
+  await expect(page.getByText('第二位伴侶')).toBeVisible()
+  await expect(page.getByText(/主要規劃人 ·/)).toBeVisible()
+})
+
 test('Dashboard 顯示家庭財務概況與未提供資料狀態', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   const overview = page.getByRole('heading', { name: '家庭財務概況' }).locator('xpath=ancestor::section[1]')
@@ -353,4 +383,5 @@ test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, cont
   await expect(page.getByText('我的退休規劃', { exact: true })).toBeVisible()
   await context.setOffline(false)
 })
+
 
