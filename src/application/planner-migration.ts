@@ -41,8 +41,8 @@ export function migratePlannerData(value: unknown): PlannerData {
   })
   if (data.schemaVersion === 'planner-data-v0.9') {
     const current = data as unknown as PlannerData
-    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return current
-    return { ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] }
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray) && Array.isArray(current.assumptions?.assetReturnPresets)) return current
+    return toV09({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] })
   }
   if (data.schemaVersion === 'planner-data-v0.8') {
     const current = data as unknown as PlannerData
