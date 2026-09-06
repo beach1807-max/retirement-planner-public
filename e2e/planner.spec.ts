@@ -155,6 +155,19 @@ test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家�
   await expect(page.getByText('家庭完整資產摘要')).toBeVisible()
 })
 
+test('Dashboard 顯示家庭財務概況與未提供資料狀態', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  const overview = page.getByRole('heading', { name: '家庭財務概況' }).locator('xpath=ancestor::section[1]')
+  await expect(overview).toContainText('每月收入')
+  await expect(overview).toContainText('每月平均支出')
+  await expect(overview).toContainText('每月負債還款')
+  await expect(overview).toContainText('每月投資')
+  await expect(overview).toContainText('每月可支配餘額')
+  await expect(overview).toContainText('尚未提供')
+  await page.getByRole('button', { name: '查看／編輯家庭資料' }).click()
+  await expect(page.getByRole('heading', { name: '家庭成員' })).toBeVisible()
+})
+
 test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   const scenarioHelp = page.getByRole('button', { name: '說明：預設與自訂報酬情境' })
