@@ -10,7 +10,11 @@ export function MemberManagement({ data, onChange }: Props) {
   const [error, setError] = useState<string | null>(null)
   const edited = editor && editor !== 'new' ? data.members.find((member) => member.id === editor) : undefined
   const primary = data.members.find((member) => member.role === 'primary')!
-  const isReferenced = (memberId: string) => data.assets.some((item) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)) || data.accounts.some((item) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)) || data.incomes.some((item) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)) || data.expenses.some((item) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)) || data.liabilities.some((item) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)) || data.contributions.some((item) => item.sourceMemberId === memberId) || data.retirementSystems.some((item) => item.memberId === memberId)
+  const referenceSummary = (memberId: string) => {
+    const owns = (item: { ownerMemberId?: string; owners?: Array<{ memberId: string }> }) => item.ownerMemberId === memberId || item.owners?.some((owner) => owner.memberId === memberId)
+    const counts = [['資產', data.assets.filter(owns).length], ['帳戶', data.accounts.filter(owns).length], ['收入', data.incomes.filter(owns).length], ['支出', data.expenses.filter(owns).length], ['負債', data.liabilities.filter(owns).length], ['每月投入', data.contributions.filter((item) => item.sourceMemberId === memberId).length], ['退休制度', data.retirementSystems.filter((item) => item.memberId === memberId).length]] as const
+    return counts.filter(([, count]) => count > 0).map(([label, count]) => `・${label} ${count} 筆`)
+  }
 
   function start(member?: PlannerMember) { setEditor(member?.id ?? 'new'); setError(null) }
   function save(event: FormEvent<HTMLFormElement>) {
@@ -29,7 +33,8 @@ export function MemberManagement({ data, onChange }: Props) {
   }
   function remove(member: PlannerMember) {
     if (member.role === 'primary') { setError('主要規劃人不可刪除。'); return }
-    if (isReferenced(member.id)) { setError(`無法刪除「${member.name}」：仍被資產、帳戶、收支、負債、投入或退休制度資料引用。`); return }
+    const references = referenceSummary(member.id)
+    if (references.length) { setError(`無法刪除「${member.name}」，仍有以下資料使用此成員：\n${references.join('\n')}\n請先重新指定或刪除相關資料。`); return }
     void onChange({ ...data, members: data.members.filter((item) => item.id !== member.id) })
   }
 
