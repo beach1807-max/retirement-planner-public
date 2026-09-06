@@ -60,6 +60,29 @@ describe('Planner Service 與遷移', () => {
     expect(first.monthlyTimeline).toEqual(second.monthlyTimeline)
   })
 
+  it('系統預設報酬會隨設定更新，自訂報酬則維持不變', async () => {
+    const data = createDemoData('2026-09-01')
+    data.assets[0].scenarioRateOrigin = { type: 'systemPreset', presetKey: 'stock' }
+    data.assets[0].scenarioRates = { conservative: '0', balanced: '0', optimistic: '0' }
+    data.assets[1].scenarioRateOrigin = { type: 'custom' }
+    data.assets[1].scenarioRates = { conservative: '0.04', balanced: '0.06', optimistic: '0.08' }
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    const before = await service.project(data)
+    data.assumptions.assetReturnPresets.find((preset) => preset.key === 'stock')!.scenarioRates.balanced = '0.12'
+    const after = await service.project(data)
+    expect(after.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal).not.toBe(before.scenarios.find((scenario) => scenario.id === 'balanced')!.milestones[0].investmentAssetsNominal)
+    expect(data.assets[1].scenarioRates?.balanced).toBe('0.06')
+  })
+
+  it('家庭總覽不把未提供的收支當成零', () => {
+    const data = createDemoData('2026-09-01')
+    data.incomes[0].status = 'notProvided'
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    const overview = service.financialOverview(data)
+    expect(overview.household.monthlyIncomeTwd).toBeUndefined()
+    expect(overview.household.unallocatedTwd).toBeUndefined()
+  })
+
   it.each([['0.98'], ['1']])('共同持分合計不等於 100%%（第一位 %s）會被拒絕', (share) => {
     const data = createDemoData('2026-09-01')
     data.assets[0] = { ...data.assets[0], ownershipType: 'joint', ownerMemberId: undefined, owners: [{ memberId: data.members[0].id, share }, { memberId: data.members[1].id, share: '0.01' }] }

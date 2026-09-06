@@ -8,6 +8,7 @@ import type { Asset, CalculationInput, CalculationResult, Contribution, Househol
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
 import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
+import { resolveAssetReturnPresetKey } from '../domain/default-return-presets'
 
 export type DashboardScope = 'household' | 'primary' | 'partner'
 export interface ProjectionOptions {
@@ -124,15 +125,19 @@ export class PlannerService {
       }
     }
     const profiles = new Map(data.assumptions.returnProfiles.map((profile) => [profile.id, profile.annualReturnRate]))
+    const assetScenarioRates = (asset: PlannerData['assets'][number]) => asset.scenarioRateOrigin?.type === 'systemPreset'
+      ? data.assumptions.assetReturnPresets.find((preset) => preset.key === (asset.scenarioRateOrigin?.presetKey ?? resolveAssetReturnPresetKey(asset.assetType, asset.allocationClass)))?.scenarioRates
+      : asset.scenarioRates
     const input: ProjectionInput = {
       customScenario: options.customScenario,
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,
-      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: asset.scenarioRates, id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
+      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: assetScenarioRates(asset), id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
       contributions: data.contributions.filter((item) => !options.scope || (item.destinationAssetId && selectedIds.has(item.destinationAssetId))).map((item) => {
         const ownerRetirement = data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth
         const primaryRetirement = data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth
         const destinationRate = item.destinationAssetId ? profiles.get(data.assets.find((asset) => asset.id === item.destinationAssetId)?.returnProfileId ?? '') : profiles.get(item.returnProfileId ?? '')
-        return { scenarioRates: item.destinationAssetId ? data.assets.find((asset) => asset.id === item.destinationAssetId)?.scenarioRates : undefined, id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
+        const destinationAsset = data.assets.find((asset) => asset.id === item.destinationAssetId)
+        return { scenarioRates: destinationAsset ? assetScenarioRates(destinationAsset) : undefined, id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
       }),
       laborPensions: (options.scope ? [] : data.retirementSystems).map((record) => {
         const member = data.members.find((item) => item.id === record.memberId)
