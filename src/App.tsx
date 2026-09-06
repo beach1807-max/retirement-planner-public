@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ArchiveRestore, ChartNoAxesCombined, Database, FlaskConical, House, PieChart, RefreshCw, Scale, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
+import { noopAnalytics } from './application/analytics'
 import { PlannerService } from './application/planner-service'
 import { ScenarioService } from './application/scenario-service'
 import { MarketDataService } from './application/market-data-service'
@@ -34,12 +35,13 @@ const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'scenarios', label: '情境比較', icon: FlaskConical },
   { id: 'market', label: '行情更新', icon: RefreshCw },
   { id: 'settings', label: '預測設定', icon: Settings },
-  { id: 'backup', label: '備份還原', icon: ArchiveRestore },
+  { id: 'backup', label: '資料與備份', icon: ArchiveRestore },
 ]
 
 export function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [data, setData] = useState<PlannerData | null>(null)
+  const [demoData, setDemoData] = useState<PlannerData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [projection, setProjection] = useState<ProjectionResult | null>(null)
   const [persistenceError, setPersistenceError] = useState<string | null>(null)
@@ -52,14 +54,16 @@ export function App() {
       .finally(() => setLoaded(true))
   }, [])
 
+  const activeData = demoData ?? data
+
   useEffect(() => {
-    if (!data) return
+    if (!activeData) return
     let active = true
-    plannerService.project(data)
+    plannerService.project(activeData)
       .then((nextProjection) => { if (active) setProjection(nextProjection) })
       .catch(() => { if (active) setPersistenceError('無法建立投資與勞退預測，請檢查資產與預測假設。') })
     return () => { active = false }
-  }, [data])
+  }, [activeData])
 
   async function saveData(next: PlannerData) {
     setProjection(null)
@@ -72,9 +76,14 @@ export function App() {
     }
   }
 
+  async function saveActiveData(next: PlannerData) {
+    if (demoData) { setDemoData(next); return }
+    await saveData(next)
+  }
+
   const primary = useMemo(
-    () => data?.members.find((member) => member.id === data.household.primaryMemberId),
-    [data],
+    () => activeData?.members.find((member) => member.id === activeData.household.primaryMemberId),
+    [activeData],
   )
 
   if (!loaded) return <div className="loading-screen" role="status">正在讀取退休規劃資料…</div>
@@ -94,11 +103,12 @@ export function App() {
     )
   }
 
-  if (!data) {
+  if (!activeData) {
     return (
       <Onboarding
         onCreate={saveData}
-        onLoadDemo={() => saveData(createDemoData(new Date().toLocaleDateString('sv-SE')))}
+        onEvent={(event) => noopAnalytics.track(event)}
+        onLoadDemo={() => { setDemoData(createDemoData(new Date().toLocaleDateString('sv-SE'))); noopAnalytics.track('demo_opened') }}
       />
     )
   }
@@ -131,16 +141,17 @@ export function App() {
       <main className="main-content" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <p className="eyebrow">{data.household.name}</p>
+            <p className="eyebrow">{activeData.household.name}</p>
             <h1>{navigation.find((item) => item.id === page)?.label}</h1>
           </div>
           <div className="topbar-meta">
             <span>主要規劃人：{primary?.name}</span>
-            <span>基準日：{data.calculationBaseDate}</span>
+            <span>基準日：{activeData.calculationBaseDate}</span>
           </div>
         </header>
 
         {persistenceError && <div className="alert error" role="alert">{persistenceError}</div>}
+        {demoData && <div className="alert info demo-banner" role="status"><span>目前正在使用展示資料，這些不是你的正式資料。</span><span><button className="button small" type="button" onClick={() => { setDemoData(null); setPage('dashboard') }}>離開展示模式</button>{!data && <button className="button small" type="button" onClick={() => setDemoData(null)}>建立我的規劃</button>}</span></div>}
         {(offlineReady || needRefresh) && (
           <div className="update-toast" role="status">
             <span>{needRefresh ? '有新版可以使用。' : '已可離線使用。'}</span>
@@ -149,20 +160,20 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard service={plannerService} data={data} systemEstimates={plannerService.retirementSystems(data)} portfolio={plannerService.portfolio(data)} projection={projection} calculating={projection === null} />}
-          {page === 'data' && <DataPage data={data} summary={plannerService.dashboard(data, 'household')} onChange={saveData} />}
-          {page === 'settings' && <SettingsPage data={data} onChange={saveData} />}
-          {page === 'retirementSystems' && <RetirementSystemsPage data={data} estimates={plannerService.retirementSystems(data)} onChange={saveData} />}
-          {page === 'portfolio' && <PortfolioPage data={data} result={plannerService.portfolio(data)} onChange={saveData} />}
-          {page === 'scenarios' && <ScenarioPage data={data} service={scenarioService} onChange={saveData} />}
-          {page === 'market' && <MarketDataPage data={data} service={marketDataService} onChange={saveData} />}
+          {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} onContinueFullPlan={() => setPage('data')} />}
+          {page === 'data' && <DataPage data={activeData} summary={plannerService.dashboard(activeData, 'household')} onChange={saveActiveData} />}
+          {page === 'settings' && <SettingsPage data={activeData} onChange={saveActiveData} />}
+          {page === 'retirementSystems' && <RetirementSystemsPage data={activeData} estimates={plannerService.retirementSystems(activeData)} onChange={saveActiveData} />}
+          {page === 'portfolio' && <PortfolioPage data={activeData} result={plannerService.portfolio(activeData)} onChange={saveActiveData} />}
+          {page === 'scenarios' && <ScenarioPage data={activeData} service={scenarioService} onChange={saveActiveData} />}
+          {page === 'market' && <MarketDataPage data={activeData} service={marketDataService} onChange={saveActiveData} />}
           {page === 'backup' && (
             <BackupPage
-              data={data}
-              onRestore={saveData}
+              data={activeData}
+              onRestore={saveActiveData}
+              feedbackUrl={import.meta.env.VITE_FEEDBACK_URL}
               onClear={async () => {
-                await plannerService.clear()
-                setData(null)
+                if (demoData) { setDemoData(null) } else { await plannerService.clear(); setData(null) }
                 setPage('dashboard')
               }}
             />

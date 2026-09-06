@@ -32,6 +32,7 @@ describe('新手資料流程', () => {
     const user = userEvent.setup()
     const create = vi.fn()
     render(<Onboarding onCreate={create} onLoadDemo={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: '建立完整退休規劃' }))
     await user.type(screen.getByLabelText('主要規劃人名稱'), '小林')
     await user.type(screen.getByLabelText('出生日期'), '1990-01-01')
     await user.click(screen.getByRole('button', { name: /開始建立/ }))

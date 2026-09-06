@@ -241,6 +241,20 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
 .section-heading { margin-bottom: 25px; }
 .section-heading h2 { font-size: 1.7rem; margin-bottom: 8px; }
 .section-heading p:last-child { color: var(--muted); }
+.onboarding-actions { display: grid; gap: 12px; }
+.choice-card { width: 100%; padding: 18px; border: 1px solid var(--border); border-radius: 12px; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; text-align: left; background: white; color: var(--primary); }
+.choice-card:hover { border-color: var(--primary-2); background: #f5f9f6; }
+.choice-card strong { font-size: 1rem; }
+.choice-card small { grid-column: 1; color: var(--muted); line-height: 1.45; }
+.choice-card svg { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.primary-choice { border-color: var(--primary-2); background: #eaf3ee; }
+.back-link { width: auto; padding: 0; margin-bottom: 12px; }
+.demo-banner { justify-content: space-between; align-items: center; }
+.demo-banner > span:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.summary-grid article { display: grid; gap: 7px; padding: 14px; border-radius: 12px; background: var(--surface-subtle); }
+.summary-grid span { color: var(--muted); font-size: .82rem; }
+.summary-grid strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1050px) {
   .content-grid { grid-template-columns: 1fr; }
@@ -273,6 +287,7 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
   .cashflow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .retirement-system-results { grid-template-columns: 1fr; }
   .allocation-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .labor-system-grid { grid-template-columns: 1fr; }
   .market-grid { grid-template-columns: 1fr; }
   .scenario-table { min-width: 0; }
@@ -309,6 +324,7 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
   label, .button { font-size: .92rem; }
   label small { font-size: .82rem; }
   .onboarding-card { width: calc(100% - 24px); padding: 22px 17px; }
+  .demo-banner { align-items: stretch; }
 }
 
 @media (prefers-reduced-motion: reduce) {

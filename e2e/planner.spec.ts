@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 async function navigateTo(page: Page, label: string, isMobile: boolean) {
-  if (isMobile && ['預測設定', '備份還原', '情境比較', '行情更新'].includes(label)) {
+  if (isMobile && ['預測設定', '資料與備份', '情境比較', '行情更新'].includes(label)) {
     await page.getByRole('button', { name: '更多功能' }).click()
     await page.getByRole('dialog').getByRole('button', { name: label }).click()
   } else {
@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.deleteDatabase('retirement-planner-pwa')
+      const request = indexedDB.deleteDatabase('retirement-planner-public')
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
       request.onblocked = () => resolve()
@@ -22,13 +22,31 @@ test.beforeEach(async ({ page }) => {
   await page.reload()
 })
 
-test('可載入展示資料、完成計算並在重新開啟後保留資料', async ({ page }) => {
+test('展示資料不寫入本機資料庫，重新開啟後回到入口', async ({ page }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('未來可能累積多少？')).toBeVisible()
   await page.reload()
-  await expect(page.getByText('林家退休計畫')).toBeVisible()
-  await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: '快速試算我的未來資產' })).toBeVisible()
+})
+
+test('快速試算可儲存並在重新開啟後保留資料', async ({ page }) => {
+  await page.getByRole('button', { name: '快速試算我的未來資產' }).click()
+  await page.getByLabel('出生日期').fill('1990-01-01')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('目前可投資資產總額（TWD）').fill('1000000')
+  await page.getByLabel('每月預計投入金額（TWD）').fill('25000')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('股票（%）').fill('70')
+  await page.getByLabel('債券（%）').fill('20')
+  await page.getByLabel('貨幣市場（%）').fill('0')
+  await page.getByLabel('現金（%）').fill('10')
+  await page.getByLabel('其他（%）').fill('0')
+  await page.getByRole('button', { name: '開始查看結果' }).click()
+  await expect(page.locator('.allocation-summary article').filter({ hasText: '股票' })).toContainText('70.0%', { timeout: 15_000 })
+  await expect(page.getByText('未來可能累積多少？')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('我的退休規劃', { exact: true })).toBeVisible()
 })
 
 test('可切換至家庭資料並新增資產', async ({ page, isMobile }) => {
@@ -82,7 +100,6 @@ test('資產情境欄位按需展開，保存後可還原為預設', async ({ pa
   await page.getByLabel('比較樂觀年報酬（%）').fill('0.5')
   await page.screenshot({ path: testInfo.outputPath('asset-rates.png'), fullPage: true })
   await page.getByRole('button', { name: '儲存資產', exact: true }).click()
-  await page.reload()
   await page.getByRole('button', { name: '家庭資料' }).click()
   await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
   await expect(page.getByLabel('這筆資產自行設定三種情境')).toBeChecked()
@@ -123,7 +140,7 @@ test('可維護收入、帳戶與持有部位，刪除帳戶不留下孤兒資�
 
 test('Dashboard 完整呈現六個期間與三種情境，資產摘要移至家庭資料', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await expect(page.getByText('我的投資怎麼分配？')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('我現在的投資怎麼分配？')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('未來可能累積多少？')).toBeVisible()
   await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
   await page.getByLabel('查看所有期間').check()
@@ -177,11 +194,11 @@ test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ p
 
 test('備份頁可以下載版本化 JSON', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await navigateTo(page, '備份還原', isMobile)
+  await navigateTo(page, '資料與備份', isMobile)
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '匯出 JSON 備份' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^退休規劃備份_\d{4}-\d{2}-\d{2}\.json$/)
+  expect(download.suggestedFilename()).toMatch(/^安心退休公開版備份_\d{4}-\d{2}-\d{2}\.json$/)
 })
 
 test('可設定投資組合並檢視配置偏離', async ({ page }) => {
@@ -196,7 +213,7 @@ test('可設定投資組合並檢視配置偏離', async ({ page }) => {
   await expect(page.getByText('投資組合設定已儲存並重新計算。')).toBeVisible()
   await expect(page.getByText('所有配置均在允許偏離範圍內。')).toBeVisible()
   await page.getByRole('button', { name: '投資與退休預測' }).click()
-  await expect(page.getByRole('heading', { name: '我的投資怎麼分配？' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '我現在的投資怎麼分配？' })).toBeVisible()
 })
 
 test('可建立、比較與刪除不修改正式資料的情境', async ({ page, isMobile }) => {
@@ -262,7 +279,7 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   await expect(page.locator('.recharts-line-dot')).toHaveCount(18)
   const chartBox = await page.locator('.chart-wrap').boundingBox()
   const allocationBox = await page.locator('.allocation-summary').boundingBox()
-  expect(allocationBox!.y).toBeGreaterThan(chartBox!.y)
+  expect(allocationBox!.y).toBeLessThan(chartBox!.y)
   await page.getByLabel('加入自訂情境').check()
   await page.getByLabel('自訂報酬調整（百分點）').fill('2')
   await expect(page.locator('.projection-table tbody td')).toHaveCount(4)
@@ -281,16 +298,9 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   await primary.getByLabel('勞退請領模式').selectOption('lumpSum')
   await primary.getByRole('button', { name: '儲存並估算' }).click()
   await expect(primary.getByText(/選擇一次領/)).toBeVisible()
-  await page.reload()
-  await page.getByRole('button', { name: '退休制度', exact: true }).click()
-  await expect(primary.getByLabel('勞退請領模式')).toHaveValue('lumpSum')
   await primary.getByLabel('目前勞保投保年資（年）').fill('20.5')
   await primary.getByLabel('勞退請領模式').selectOption('monthly')
   await primary.getByRole('button', { name: '儲存並估算' }).click()
-  await expect(primary.getByText(/目前 20.5 年 ＋ 預估續保/)).toBeVisible()
-  await page.reload()
-  await page.getByRole('button', { name: '退休制度', exact: true }).click()
-  await expect(primary.getByLabel('目前勞保投保年資（年）')).toHaveValue('20.5')
   await expect(primary.getByText(/目前 20.5 年 ＋ 預估續保/)).toBeVisible()
   await expect(primary.getByText(/首期月領約/)).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('pension-monthly.png'), fullPage: true })
@@ -310,11 +320,22 @@ test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => 
 })
 
 test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context }) => {
-  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '快速試算我的未來資產' }).click()
+  await page.getByLabel('出生日期').fill('1990-01-01')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('目前可投資資產總額（TWD）').fill('1000000')
+  await page.getByLabel('每月預計投入金額（TWD）').fill('0')
+  await page.getByRole('button', { name: '下一步' }).click()
+  await page.getByLabel('股票（%）').fill('100')
+  await page.getByLabel('債券（%）').fill('0')
+  await page.getByLabel('貨幣市場（%）').fill('0')
+  await page.getByLabel('現金（%）').fill('0')
+  await page.getByLabel('其他（%）').fill('0')
+  await page.getByRole('button', { name: '開始查看結果' }).click()
   await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
   await page.evaluate(() => navigator.serviceWorker.ready)
   await context.setOffline(true)
   await page.reload()
-  await expect(page.getByText('林家退休計畫')).toBeVisible()
+  await expect(page.getByText('我的退休規劃', { exact: true })).toBeVisible()
   await context.setOffline(false)
 })

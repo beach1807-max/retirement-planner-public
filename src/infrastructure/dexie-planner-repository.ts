@@ -9,10 +9,12 @@ interface PlannerRecord {
   updatedAt: string
 }
 
+export const APP_DATABASE_NAME = 'retirement-planner-public'
+
 class RetirementPlannerDatabase extends Dexie {
   planner!: EntityTable<PlannerRecord, 'id'>
 
-  constructor(databaseName = 'retirement-planner-pwa') {
+  constructor(databaseName = APP_DATABASE_NAME) {
     super(databaseName)
     this.version(1).stores({ planner: 'id, updatedAt' })
     this.version(2).stores({ planner: 'id, updatedAt' }).upgrade(async (transaction) => {
@@ -57,7 +59,7 @@ class RetirementPlannerDatabase extends Dexie {
 export class DexiePlannerRepository implements PlannerRepository {
   private readonly database: RetirementPlannerDatabase
 
-  constructor(databaseName = 'retirement-planner-pwa') {
+  constructor(databaseName = APP_DATABASE_NAME) {
     this.database = new RetirementPlannerDatabase(databaseName)
   }
 

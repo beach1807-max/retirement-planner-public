@@ -1,5 +1,5 @@
 {
-  "name": "retirement-planner-pwa",
+  "name": "retirement-planner-public",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -17,8 +17,8 @@
     "lint": "eslint .",
     "icons": "node scripts/generate-icons.mjs",
     "check": "npm run lint && npm run test && npm run build",
-    "deploy:preview": "wrangler pages deploy dist --project-name retirement-planner-pwa --branch preview",
-    "deploy": "wrangler pages deploy dist --project-name retirement-planner-pwa"
+    "deploy:preview": "wrangler pages deploy dist --project-name retirement-planner-public --branch preview",
+    "deploy": "wrangler pages deploy dist --project-name retirement-planner-public"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

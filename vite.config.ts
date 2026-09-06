@@ -10,8 +10,8 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       manifest: {
         name: '安心退休規劃',
-        short_name: '退休規劃',
-        description: '以個人與家庭資源估算退休時點與退休資產的本機優先規劃工具。',
+        short_name: '安心退休',
+        description: '免費看懂現在的資產配置、未來累積金額與通膨後購買力，並可進一步建立個人與家庭退休規劃。',
         theme_color: '#12372a',
         background_color: '#f4f7f4',
         display: 'standalone',

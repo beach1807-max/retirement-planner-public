@@ -79,7 +79,7 @@ export function downloadBackup(data: PlannerData): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `退休規劃備份_${new Date().toISOString().slice(0, 10)}.json`
+  anchor.download = `安心退休公開版備份_${new Date().toISOString().slice(0, 10)}.json`
   anchor.click()
   URL.revokeObjectURL(url)
 }

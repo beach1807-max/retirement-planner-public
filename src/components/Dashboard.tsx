@@ -6,14 +6,15 @@ import type { PlannerService, ProjectionOptions, RetirementSystemView } from '..
 import type { ProjectionResult } from '../domain/models'
 import type { RebalancingResult } from '../domain/rebalancing-engine'
 import { CalculationHelp } from './CalculationHelp'
+import { PlanSummary } from './PlanSummary'
 
-interface Props { service: PlannerService; data: PlannerData; systemEstimates: RetirementSystemView[]; portfolio: RebalancingResult | null; projection: ProjectionResult | null; calculating: boolean }
+interface Props { service: PlannerService; data: PlannerData; systemEstimates: RetirementSystemView[]; portfolio: RebalancingResult | null; projection: ProjectionResult | null; calculating: boolean; onContinueFullPlan: () => void }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 const compactCurrency = (value: number) => new Intl.NumberFormat('zh-TW', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 const allocationLabels: Record<string, string> = { stock: '股票', bond: '債券', moneyMarket: '貨幣市場', cash: '現金', other: '其他' }
 const scenarioColors = { conservative: '#8a6a24', balanced: '#1c6b4a', optimistic: '#3f6fa8', custom: '#8057a3' }
 
-export function Dashboard({ data, systemEstimates, portfolio, projection: initialProjection, calculating, service }: Props) {
+export function Dashboard({ data, systemEstimates, portfolio, projection: initialProjection, calculating, service, onContinueFullPlan }: Props) {
   const [years, setYears] = useState(10)
   const [showAll, setShowAll] = useState(false)
   const [scope, setScope] = useState('all')
@@ -46,6 +47,14 @@ export function Dashboard({ data, systemEstimates, portfolio, projection: initia
 
     <section className="panel"><h2>看懂配置、未來金額與今天的購買力</h2><p className="muted">先在家庭資料記錄資產，再到投資組合選取預測範圍。下方可選擇未來期間、資產範圍與報酬情境，退休時間由你自己決定。</p>{calculating && <p role="status">正在建立未來資產預測…</p>}</section>
 
+    <PlanSummary portfolio={portfolio} projection={projection} years={years} />
+
+    <section className="panel">
+      <div className="panel-heading"><div><h3><PieChart size={20} /><CalculationHelp label="我現在的投資怎麼分配？" topic="currentAllocation" /></h3><p>各類金額除以投資組合總額，就是目前占比。ETF 與基金依投資內容分類。</p></div><small>{lastMarketUpdate ? `行情 ${new Date(lastMarketUpdate.completedAt).toLocaleDateString('zh-TW')}` : '使用目前登錄市值'}</small></div>
+      <p className="muted">納入資產：{data.assets.filter((asset) => data.portfolios[0]?.assetIds.includes(asset.id)).map((asset) => asset.name).join('、') || '尚未選取，請至投資組合設定'}</p>
+      {portfolio?.allocations.length ? <div className="allocation-summary">{portfolio.allocations.map((item) => <article key={item.assetClass}><div><span>{allocationLabels[item.assetClass] ?? item.assetClass}</span><strong>{(Number(item.currentWeight) * 100).toFixed(1)}%</strong></div><div className="allocation-bar" aria-label={`${allocationLabels[item.assetClass] ?? item.assetClass} ${(Number(item.currentWeight) * 100).toFixed(1)}%`}><span style={{ width: `${Number(item.currentWeight) * 100}%` }} /></div><small>{currency.format(Number(item.valueTwd))}</small></article>)}</div> : <p className="muted">請至投資組合選取要納入分析與預測的資產。</p>}
+    </section>
+
 
 
     <section className="panel">
@@ -69,11 +78,7 @@ export function Dashboard({ data, systemEstimates, portfolio, projection: initia
       <article className="panel"><div className="panel-heading"><div><h3><CalculationHelp label="穩健情境組成" topic="investmentAssets" /></h3><p>投資資產與勞退專戶分開列示。</p></div></div><div className="milestone-grid projection-breakdown">{balanced?.milestones.filter((item) => showAll || item.yearsFromNow === years).map((item) => <article key={item.yearsFromNow}><span>{item.yearsFromNow} 年後</span><strong>{currency.format(Number(item.totalAssetsNominal))}</strong><small>投資 {currency.format(Number(item.investmentAssetsNominal))}</small><small>勞退 {currency.format(Number(item.laborPensionAssetsNominal))}</small></article>)}</div></article>
     </section>
 
-    <section className="panel">
-      <div className="panel-heading"><div><h3><PieChart size={20} /><CalculationHelp label="我的投資怎麼分配？" topic="currentAllocation" /></h3><p>各類金額除以投資組合總額，就是目前占比。ETF 與基金依投資內容分類。</p></div><small>{lastMarketUpdate ? `行情 ${new Date(lastMarketUpdate.completedAt).toLocaleDateString('zh-TW')}` : '使用目前登錄市值'}</small></div>
-      <p className="muted">納入資產：{data.assets.filter((asset) => data.portfolios[0]?.assetIds.includes(asset.id)).map((asset) => asset.name).join("、") || "尚未選取，請至投資組合設定"}</p>
-      {portfolio?.allocations.length ? <div className="allocation-summary">{portfolio.allocations.map((item) => <article key={item.assetClass}><div><span>{allocationLabels[item.assetClass] ?? item.assetClass}</span><strong>{(Number(item.currentWeight) * 100).toFixed(1)}%</strong></div><div className="allocation-bar" aria-label={`${allocationLabels[item.assetClass] ?? item.assetClass} ${(Number(item.currentWeight) * 100).toFixed(1)}%`}><span style={{ width: `${Number(item.currentWeight) * 100}%` }} /></div><small>{currency.format(Number(item.valueTwd))}</small></article>)}</div> : <p className="muted">請至投資組合選取要納入分析與預測的資產。</p>}
-    </section>
+    {data.incomes.length === 0 && data.expenses.length === 0 && data.retirementSystems.length === 0 && <section className="panel"><h3>如果我要做完整退休規劃</h3><p>目前已完成資產預測。若要估算退休時間，可繼續補上收入、支出、勞保與勞退。</p><button className="button secondary" type="button" onClick={onContinueFullPlan}>繼續完成退休規劃</button></section>}
 
     <section className="panel">
       <div className="panel-heading"><div><h3><Landmark size={20} /><CalculationHelp label="勞保年金" topic="laborInsurance" />與<CalculationHelp label="勞退專戶" topic="laborPension" /></h3><p>勞保固定月領；勞退依退休制度頁選擇一次領或月領。整體預測的勞退在請領後保留請領時點金額，並非剩餘專戶餘額；月領收入不再重複加總。</p></div><small>估算，實際資格與金額以主管機關核定為準</small></div>
