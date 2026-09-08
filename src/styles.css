@@ -131,6 +131,14 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
 .settings-form { display: grid; gap: 25px; }
 .settings-form fieldset { padding: 0; border: 0; }
 .settings-form legend { width: 100%; padding-bottom: 12px; margin-bottom: 15px; border-bottom: 1px solid var(--border); font-weight: 800; color: var(--primary); }
+.inline-action { border: 0; padding: 0; background: transparent; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; }
+.preset-list { display: grid; gap: 10px; }
+.preset-card { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.preset-summary { width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 14px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.preset-summary > span:first-child { display: flex; align-items: baseline; gap: 8px; }
+.preset-summary small { color: var(--muted); }
+.preset-editor { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.preset-editor .form-grid { margin: 14px 0; }
 .context-help-row { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--muted); font-size: .82rem; }
 .calculation-help { position: relative; display: inline-flex; align-items: center; gap: 3px; min-width: 0; font: inherit; color: inherit; }
 .calculation-help-label { color: inherit; }

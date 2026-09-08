@@ -16,11 +16,12 @@ export class MarketDataService {
       for (const quote of batch.quotes) {
         const instrument = next.instruments.find((item) => item.id === quote.instrumentId)
         const asset = instrument && next.assets.find((item) => item.id === instrument.assetId)
-        const holding = asset && next.holdings.find((item) => item.assetId === asset.id && item.status === 'provided')
-        if (!instrument || !asset || !holding) { batch.errors.push({ instrumentId: quote.instrumentId, message: `${quote.symbol} 缺少有效持有數量，保留原市值。` }); continue }
+        const holdings = asset ? next.holdings.filter((item) => item.assetId === asset.id && item.status === 'provided') : []
+        if (!instrument || !asset || holdings.length === 0) { batch.errors.push({ instrumentId: quote.instrumentId, message: `${quote.symbol} 缺少有效持有數量，保留原市值。` }); continue }
         const fx = quote.currency === 'TWD' ? new Decimal(1) : new Decimal(batch.rates.find((item) => item.fromCurrency === quote.currency && item.toCurrency === 'TWD')?.rate ?? NaN)
         if (!fx.isFinite()) { batch.errors.push({ instrumentId: quote.instrumentId, message: `${quote.symbol} 缺少 ${quote.currency}/TWD 匯率，保留原市值。` }); continue }
-        asset.currentValue = { amount: new Decimal(holding.quantity).mul(quote.price).mul(fx).toDecimalPlaces(2).toFixed(2), currency: 'TWD' }
+        const totalQuantity = holdings.reduce((sum, holding) => sum.plus(holding.quantity), new Decimal(0))
+        asset.currentValue = { amount: totalQuantity.mul(quote.price).mul(fx).toDecimalPlaces(2).toFixed(2), currency: 'TWD' }
         asset.updatedAt = batch.fetchedAt
         updatedAssetIds.push(asset.id)
       }

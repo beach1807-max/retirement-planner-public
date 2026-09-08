@@ -1,12 +1,20 @@
+import Decimal from 'decimal.js'
 import { useState, type FormEvent } from 'react'
 import { Save } from 'lucide-react'
 import type { PlannerData } from '../application/planner-data'
 import { CalculationHelp } from './CalculationHelp'
+import { DEFAULT_ASSET_RETURN_PRESETS } from '../domain/default-return-presets'
+import type { AssetReturnPresetKey, AssetScenarioRates } from '../domain/models'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 
+const toPercent = (value: string) => new Decimal(value).mul(100).toString()
+
 export function SettingsPage({ data, onChange }: Props) {
   const [saved, setSaved] = useState(false)
+  const [openPreset, setOpenPreset] = useState<AssetReturnPresetKey | null>(null)
+  const [presetError, setPresetError] = useState<string | null>(null)
+  const [presetDrafts, setPresetDrafts] = useState<Record<AssetReturnPresetKey, AssetScenarioRates>>(() => Object.fromEntries(data.assumptions.assetReturnPresets.map((preset) => [preset.key, { ...preset.scenarioRates }])) as Record<AssetReturnPresetKey, AssetScenarioRates>)
   const primary = data.members.find((member) => member.id === data.household.primaryMemberId)!
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -14,15 +22,12 @@ export function SettingsPage({ data, onChange }: Props) {
     const form = new FormData(event.currentTarget)
     const annualReturnRate = (Number(form.get('annualReturnPercent')) / 100).toString()
     const annualInflationRate = (Number(form.get('annualInflationPercent')) / 100).toString()
-    const assetReturnPresets = data.assumptions.assetReturnPresets.map((preset) => ({
-      ...preset,
-      scenarioRates: {
-        conservative: (Number(form.get(`preset-${preset.key}-conservative`)) / 100).toString(),
-        balanced: (Number(form.get(`preset-${preset.key}-balanced`)) / 100).toString(),
-        optimistic: (Number(form.get(`preset-${preset.key}-optimistic`)) / 100).toString(),
-      },
-    }))
-    if (assetReturnPresets.some((preset) => Number(preset.scenarioRates.conservative) > Number(preset.scenarioRates.balanced) || Number(preset.scenarioRates.balanced) > Number(preset.scenarioRates.optimistic))) return
+    const assetReturnPresets = data.assumptions.assetReturnPresets.map((preset) => ({ ...preset, scenarioRates: { ...presetDrafts[preset.key] } }))
+    if (assetReturnPresets.some((preset) => Number(preset.scenarioRates.conservative) > Number(preset.scenarioRates.balanced) || Number(preset.scenarioRates.balanced) > Number(preset.scenarioRates.optimistic))) {
+      setPresetError('請讓每一類的保守報酬率 ≤ 穩健 ≤ 比較樂觀。')
+      return
+    }
+    setPresetError(null)
     const now = new Date().toISOString()
     const members = data.members.map((member) => ({
       ...member,
@@ -65,7 +70,7 @@ export function SettingsPage({ data, onChange }: Props) {
         <div className="panel-heading"><div><h2>預測設定</h2><p>調整未來累積與購買力的假設。相同本金與投入計畫，會同時比較三種報酬情境。</p></div></div>
         <form className="settings-form" onSubmit={submit}>
           <fieldset><legend>報酬與物價假設</legend><div className="context-help-row"><CalculationHelp label="預估年報酬率" topic="annualReturn" /><CalculationHelp label="年通膨率" topic="inflation" /></div><div className="form-grid two"><label>預估年報酬率（%）<input name="annualReturnPercent" type="number" min="-99" max="100" step="0.1" required defaultValue={Number(balanced.annualReturnRate) * 100} /><small>使用基準報酬設定的投資套用此值；其他報酬設定與勞退另計。</small></label><label>年通膨率（%）<input name="annualInflationPercent" type="number" min="-99" max="100" step="0.1" required defaultValue={Number(data.assumptions.annualInflationRate) * 100} /></label></div></fieldset>
-          <fieldset><legend>資產類別情境報酬預設</legend><p className="muted">這些是系統初始試算假設，不是保證報酬或市場預測。只會影響日後新增資產，或主動重新套用系統預設的資產；既有資產不會被自動改寫。</p>{data.assumptions.assetReturnPresets.map((preset) => <div className="form-grid four" key={preset.key}><strong>{preset.label}</strong>{([['conservative', '保守'], ['balanced', '穩健'], ['optimistic', '樂觀']] as const).map(([scenario, label]) => <label key={scenario}>{label}（%）<input name={`preset-${preset.key}-${scenario}`} type="number" min="-99" max="100" step="0.1" required defaultValue={Number(preset.scenarioRates[scenario]) * 100} /></label>)}</div>)}</fieldset>
+          <fieldset><legend>資產類別情境報酬預設</legend><p className="muted">預設只顯示摘要；一次展開一個類別調整。這些是假設，不是保證報酬或市場預測。</p><div className="preset-list">{data.assumptions.assetReturnPresets.map((preset) => { const draft = presetDrafts[preset.key]; const systemPreset = DEFAULT_ASSET_RETURN_PRESETS.find((item) => item.key === preset.key)!; const customized = (['conservative', 'balanced', 'optimistic'] as const).some((scenario) => draft[scenario] !== systemPreset.scenarioRates[scenario]); const expanded = openPreset === preset.key; return <article className="preset-card" key={preset.key}><button className="preset-summary" type="button" aria-expanded={expanded} onClick={() => setOpenPreset(expanded ? null : preset.key)}><span><strong>{preset.label}</strong><small>{customized ? '已自訂' : '系統預設'}</small></span><span>{toPercent(draft.conservative)}% / {toPercent(draft.balanced)}% / {toPercent(draft.optimistic)}%</span><span aria-hidden="true">{expanded ? '−' : '＋'}</span></button>{expanded && <div className="preset-editor"><div className="form-grid three">{([['conservative', '保守'], ['balanced', '穩健'], ['optimistic', '比較樂觀']] as const).map(([scenario, label]) => <label key={scenario}>{label}（%）<input type="number" min="-99" max="100" step="0.1" required value={toPercent(draft[scenario])} onChange={(event) => setPresetDrafts({ ...presetDrafts, [preset.key]: { ...draft, [scenario]: new Decimal(event.target.value || 0).div(100).toString() } })} /></label>)}</div><button className="button small secondary" type="button" onClick={() => setPresetDrafts({ ...presetDrafts, [preset.key]: { ...systemPreset.scenarioRates } })}>恢復系統預設</button></div>}</article> })}</div>{presetError && <div className="field-error" role="alert">{presetError}</div>}</fieldset>
           <label>計算基準日<input name="calculationBaseDate" type="date" required defaultValue={data.calculationBaseDate} /></label>
           <fieldset><legend>依成員日期停止投入（選填）</legend><p className="muted">只有選擇「成員退休時停止」的每月投入會使用這些日期。留白時，該筆投入會持續計算至 35 年後；也可到家庭資料為投入指定固定停止月份。</p><div className="form-grid two">{data.members.filter((member) => member.role !== 'other').map((member) => <label key={member.id}>{member.role === 'primary' ? '主要規劃人' : '伴侶'}預計退休月份<input name={`plannedRetirementMonth-${member.id}`} type="month" min={data.calculationBaseDate.slice(0, 7)} defaultValue={member.plannedRetirementMonth} /></label>)}</div></fieldset>
           <details className="advanced-settings"><summary>舊版退休試算資料（選填）</summary><p className="muted">下列生活費、準備金、遺產與支出資料保留供舊版試算使用，不會從首頁未來資產預估中扣除。</p>

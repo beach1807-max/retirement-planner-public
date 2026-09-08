@@ -44,6 +44,45 @@ describe('新手資料流程', () => {
     expect((await service.project(data)).scenarios).toHaveLength(3)
   })
 
+  it('新增 0050 ETF 時自動分類、套用股票預設並一次建立行情關聯', async () => {
+    const data = createDemoData('2026-09-01')
+    const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
+    const changed = vi.fn()
+    const user = userEvent.setup()
+    render(<DataPage data={data} summary={service.dashboard(data, 'household')} onChange={changed} />)
+    await user.click(screen.getByRole('button', { name: '新增資產' }))
+    await user.type(screen.getByLabelText('資產名稱'), '0050')
+    await user.selectOptions(screen.getByLabelText('類型'), 'etf')
+    expect(screen.getByLabelText(/投資配置分類/)).toHaveValue('stock')
+    expect(screen.getByLabelText('使用市場行情更新目前價值')).toBeChecked()
+    expect(screen.getByLabelText('上市代碼')).toHaveValue('0050')
+    await user.type(screen.getByLabelText('持有數量'), '3000')
+    await user.click(screen.getByRole('button', { name: '儲存資產' }))
+    const saved = changed.mock.calls[0][0]
+    const asset = saved.assets.at(-1)
+    expect(asset).toMatchObject({ name: '0050', assetType: 'etf', allocationClass: 'stock', currentValue: { amount: '0', currency: 'TWD' }, scenarioRates: { conservative: '0.04', balanced: '0.06', optimistic: '0.08' }, scenarioRateOrigin: { type: 'systemPreset', presetKey: 'stock' } })
+    expect(saved.instruments).toMatchObject([{ assetId: asset.id, symbol: '0050' }])
+    expect(saved.holdings).toMatchObject([{ assetId: asset.id, quantity: '3000' }])
+  })
+
+  it('預設報酬 Accordion 保留未儲存草稿並可恢復系統預設', async () => {
+    const data = createDemoData('2026-09-01')
+    const changed = vi.fn()
+    const user = userEvent.setup()
+    render(<SettingsPage data={data} onChange={changed} />)
+    await user.click(screen.getByRole('button', { name: /股票.*4%.*6%.*8%/ }))
+    await user.clear(screen.getByLabelText('穩健（%）'))
+    await user.type(screen.getByLabelText('穩健（%）'), '7')
+    await user.click(screen.getByRole('button', { name: /股票.*4%.*7%.*8%/ }))
+    await user.click(screen.getByRole('button', { name: /債券.*2%.*3%.*4%/ }))
+    await user.click(screen.getByRole('button', { name: /股票.*4%.*7%.*8%/ }))
+    expect(screen.getByLabelText('穩健（%）')).toHaveValue(7)
+    expect(screen.getByText('已自訂')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '恢復系統預設' }))
+    expect(screen.getByLabelText('穩健（%）')).toHaveValue(6)
+    expect(screen.getAllByText('系統預設').length).toBeGreaterThan(0)
+  })
+
   it('儲存一般設定仍保留收合的舊版資料與相同預測結果', async () => {
     const data = createDemoData('2026-09-01')
     data.retirementPlan.oneTimeExpenses = [{ id: 'repair', name: '修繕', month: '2040-01', amountTwdReal: '123456' }]

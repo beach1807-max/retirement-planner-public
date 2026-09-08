@@ -24,6 +24,16 @@ describe('Market Data Service', () => {
     expect(result.data.assets).toEqual(data.assets)
   })
 
+  it('同一資產會加總所有有效 Holding 後計算市值', async () => {
+    const data = createDemoData('2026-09-01')
+    const asset = data.assets[0]
+    data.accounts = ['a', 'b'].map((id) => ({ id, householdId: data.household.id, name: id, accountType: 'brokerage' as const, ownershipType: 'household' as const, status: 'provided' as const, createdAt: data.updatedAt, updatedAt: data.updatedAt }))
+    data.holdings = ['100', '250'].map((quantity, index) => ({ id: `holding-${index}`, householdId: data.household.id, accountId: index ? 'b' : 'a', assetId: asset.id, quantity, status: 'provided' as const, createdAt: data.updatedAt, updatedAt: data.updatedAt }))
+    data.instruments = [{ id: 'instrument', householdId: data.household.id, assetId: asset.id, symbol: '0050', market: 'TWSE', currency: 'TWD', createdAt: data.updatedAt, updatedAt: data.updatedAt }]
+    const service = new MarketDataService({ id: 'fixture', fetchLatest: async () => ({ quotes: [{ instrumentId: 'instrument', symbol: '0050', price: '75', currency: 'TWD', asOf: '2026-09-01', sourceId: 'twse' }], rates: [], errors: [], fetchedAt: '2026-09-02T00:00:00Z' }) })
+    expect((await service.refresh(data)).data.assets[0].currentValue.amount).toBe('26250.00')
+  })
+
   it('部分標的失敗時保留該標的上次行情', async () => {
     const data = createDemoData('2026-09-01')
     data.instruments = [{ id: 'old', householdId: data.household.id, assetId: data.assets[0].id, symbol: '0050', market: 'TWSE', currency: 'TWD', createdAt: data.updatedAt, updatedAt: data.updatedAt }]

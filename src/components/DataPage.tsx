@@ -7,6 +7,9 @@ import { FinancialDataSections } from './FinancialDataSections'
 import type { DashboardViewModel } from '../application/planner-service'
 import { CalculationHelp } from './CalculationHelp'
 import { MemberManagement } from './MemberManagement'
+import { defaultAllocationClassForAssetType } from '../domain/asset-classification'
+import { inferTwseSymbolFromAssetName, isMarketTrackableAssetType } from '../domain/market-trackable'
+import { upsertAssetMarketLink } from '../application/asset-market-link'
 
 interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -22,6 +25,9 @@ export function DataPage({ data, onChange, summary }: Props) {
   const [applySystemPreset, setApplySystemPreset] = useState(true)
   const [assetType, setAssetType] = useState<PlannerAsset['assetType']>('cash')
   const [allocationClass, setAllocationClass] = useState<NonNullable<PlannerAsset['allocationClass']>>('cash')
+  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto')
+  const [marketTracking, setMarketTracking] = useState(false)
+  const [symbol, setSymbol] = useState('')
   const [customRates, setCustomRates] = useState({ conservative: '0', balanced: '0', optimistic: '0' })
   const [error, setError] = useState<string | null>(null)
   const editedAsset = assetEditor && assetEditor !== 'new' ? data.assets.find((item) => item.id === assetEditor) : undefined
@@ -32,7 +38,11 @@ export function DataPage({ data, onChange, summary }: Props) {
     setAssetRateMode(asset?.scenarioRateOrigin?.type === 'systemPreset' || !asset?.scenarioRates ? 'system' : 'custom')
     setApplySystemPreset(!asset || Boolean(asset?.scenarioRateOrigin))
     setAssetType(asset?.assetType ?? 'cash')
-    setAllocationClass(asset?.allocationClass ?? 'cash')
+    setAllocationClass(asset?.allocationClass ?? defaultAllocationClassForAssetType(asset?.assetType ?? 'cash'))
+    setAllocationMode(asset ? 'manual' : 'auto')
+    const instrument = asset && data.instruments.find((item) => item.assetId === asset.id)
+    setMarketTracking(Boolean(instrument))
+    setSymbol(instrument?.symbol ?? inferTwseSymbolFromAssetName(asset?.name ?? '') ?? '')
     setCustomRates({
       conservative: asset?.scenarioRates ? new Decimal(asset.scenarioRates.conservative).mul(100).toString() : '0',
       balanced: asset?.scenarioRates ? new Decimal(asset.scenarioRates.balanced).mul(100).toString() : '0',
@@ -62,20 +72,35 @@ export function DataPage({ data, onChange, summary }: Props) {
       ? { conservative: preset.scenarioRates.conservative, balanced: preset.scenarioRates.balanced, optimistic: preset.scenarioRates.optimistic }
       : { conservative: new Decimal(customRates.conservative).div(100).toString(), balanced: new Decimal(customRates.balanced).div(100).toString(), optimistic: new Decimal(customRates.optimistic).div(100).toString() }
     if (scenarioRates && (new Decimal(scenarioRates.conservative).gt(scenarioRates.balanced) || new Decimal(scenarioRates.balanced).gt(scenarioRates.optimistic))) { setError('請讓保守報酬率 ≤ 穩健 ≤ 比較樂觀。'); return }
+    const currentValue = String(form.get('currentValue')).trim() || editedAsset?.currentValue.amount || '0'
     const asset: PlannerAsset = {
       scenarioRates, scenarioRateOrigin: preserveLegacyRate ? undefined : assetRateMode === 'system' ? { type: 'systemPreset', presetKey } : { type: 'custom' },
       id: editedAsset?.id ?? crypto.randomUUID(), householdId: data.household.id, name: String(form.get('name')),
       assetType, ownershipType,
       allocationClass: allocationClass || undefined,
       ownerMemberId: ownershipType === 'individual' ? String(form.get('ownerMemberId')) : undefined, owners,
-      currentValue: { amount: String(form.get('currentValue')), currency: 'TWD' }, includeInTotalAssets: form.get('includeInTotalAssets') === 'on',
+      currentValue: { amount: currentValue, currency: 'TWD' }, includeInTotalAssets: form.get('includeInTotalAssets') === 'on',
       retirementUsageScope: String(form.get('retirementUsageScope')) as PlannerAsset['retirementUsageScope'], availableFrom: String(form.get('availableFrom')),
       returnProfileId: String(form.get('returnProfileId')) || undefined, status: String(form.get('status')) as PlannerAsset['status'],
       accountId: String(form.get('accountId')) || undefined, region: String(form.get('region')) as PlannerAsset['region'] || undefined,
       riskLevel: String(form.get('riskLevel')) as PlannerAsset['riskLevel'] || undefined, propertyAddress: String(form.get('propertyAddress')) || undefined,
       createdAt: editedAsset?.createdAt ?? now, updatedAt: now,
     }
-    void onChange({ ...data, assets: editedAsset ? data.assets.map((item) => item.id === asset.id ? asset : item) : [...data.assets, asset] })
+    const withAsset = { ...data, assets: editedAsset ? data.assets.map((item) => item.id === asset.id ? asset : item) : [...data.assets, asset] }
+    let next: PlannerData
+    try {
+      next = upsertAssetMarketLink(withAsset, {
+        assetId: asset.id,
+        enabled: marketTracking && isMarketTrackableAssetType(assetType),
+        symbol,
+        quantity: String(form.get('quantity') ?? ''),
+        accountId: String(form.get('accountId') ?? '') || undefined,
+      })
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message === 'MISSING_HOLDING_QUANTITY' ? '請輸入持有數量。' : '請輸入有效的臺灣上市代碼。')
+      return
+    }
+    void onChange(next)
     setAssetEditor(null); setError(null)
   }
 
@@ -111,27 +136,27 @@ export function DataPage({ data, onChange, summary }: Props) {
       <div className="panel-heading"><div><h2><WalletCards size={21} /> 我的資產</h2><p>把目前擁有的資產記錄在這裡。記錄後，到「投資組合」選擇哪些資產要加入預測；所有金額以新臺幣填寫。</p></div><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button></div>
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
         <h3>基本資料</h3><p className="muted">這是什麼、現在值多少、是誰的。</p><div className="form-grid three">
-          <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
-          <label>類型<select name="assetType" value={assetType} onChange={(event) => setAssetType(event.target.value as PlannerAsset['assetType'])}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
-          <label>目前價值（TWD）<input name="currentValue" type="number" required min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /></label>
+          <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} onChange={(event) => { if (!symbol) setSymbol(inferTwseSymbolFromAssetName(event.target.value) ?? '') }} /></label>
+          <label>類型<select name="assetType" value={assetType} onChange={(event) => { const nextType = event.target.value as PlannerAsset['assetType']; setAssetType(nextType); if (allocationMode === 'auto') setAllocationClass(defaultAllocationClassForAssetType(nextType)); setMarketTracking(isMarketTrackableAssetType(nextType)); }}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
+          <label>目前價值（TWD）<input name="currentValue" type="number" required={!marketTracking} min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /><small>{marketTracking ? '選填；尚未取得行情時使用，留白以 0 元建立。' : '未使用行情追蹤時必填。'}</small></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>
           {ownershipType === 'individual' && <label>所屬成員<select name="ownerMemberId" defaultValue={editedAsset?.ownerMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
           {ownershipType === 'joint' && data.members.map((member) => <label key={member.id}>{member.name} 持分（%）<input name={`share-${member.id}`} type="number" min="0" max="100" step="0.01" defaultValue={Number(editedAsset?.owners?.find((owner) => owner.memberId === member.id)?.share ?? 0) * 100 || undefined} /></label>)}
         </div><h3>投資預測相關設定</h3><p className="muted">分類與報酬不代表已加入預測。儲存後請到「投資組合」選取。</p><div className="form-grid two">
-          <label>投資配置分類<select name="allocationClass" value={allocationClass} onChange={(event) => setAllocationClass(event.target.value as NonNullable<PlannerAsset['allocationClass']>)}><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>ETF 與基金請依實際投資內容分類。</small></label>
+          <label>投資配置分類<select name="allocationClass" value={allocationClass} onChange={(event) => { setAllocationClass(event.target.value as NonNullable<PlannerAsset['allocationClass']>); setAllocationMode('manual') }}><option value="stock">股票</option><option value="bond">債券</option><option value="moneyMarket">貨幣市場</option><option value="cash">現金</option><option value="other">其他</option></select><small>{allocationMode === 'auto' ? '依資產類型自動帶入，可手動修改。' : '已自訂分類。'} {allocationMode === 'manual' && <button className="inline-action" type="button" onClick={() => { setAllocationMode('auto'); setAllocationClass(defaultAllocationClassForAssetType(assetType)) }}>恢復系統自動分類</button>}</small></label>
           <label>報酬設定<select name="returnProfileId" defaultValue={editedAsset ? editedAsset.returnProfileId ?? '' : 'balanced'}><option value="">未設定報酬（以 0% 計算）</option>{data.assumptions.returnProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
-        </div><fieldset><legend>情境報酬來源</legend><label className="checkbox-row"><input type="radio" checked={assetRateMode === 'system'} onChange={() => { setAssetRateMode('system'); setApplySystemPreset(true) }} />使用系統預設（{resolveAssetReturnPresetKey(assetType, allocationClass)}）</label><p className="muted">保守 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.conservative ?? 0) * 100}%／穩健 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.balanced ?? 0) * 100}%／樂觀 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.optimistic ?? 0) * 100}%</p><label className="checkbox-row"><input type="radio" checked={assetRateMode === 'custom'} onChange={() => setAssetRateMode('custom')} />自訂此資產的三種情境報酬</label>{assetRateMode === 'custom' && <div className="form-grid three">{([['conservative', '保守年報酬（%）'], ['balanced', '穩健年報酬（%）'], ['optimistic', '比較樂觀年報酬（%）']] as const).map(([key, label]) => <label key={key}>{label}<input type="number" min="-99" max="100" step="any" required value={customRates[key]} onChange={(event) => setCustomRates({ ...customRates, [key]: event.target.value })} /><small>填年報酬率，可為 0 或負數。</small></label>)}</div>}<button className="button small secondary" type="button" onClick={() => { setAssetRateMode('system'); setApplySystemPreset(true) }}>重新套用系統預設</button></fieldset><details className="advanced-settings"><summary>進階資產設定（選填）</summary><div className="context-help-row"><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /></div><div className="form-grid three">
+        </div><fieldset><legend>情境報酬來源</legend><label className="checkbox-row"><input type="radio" checked={assetRateMode === 'system'} onChange={() => { setAssetRateMode('system'); setApplySystemPreset(true) }} />使用系統預設（{resolveAssetReturnPresetKey(assetType, allocationClass)}）</label><p className="muted">保守 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.conservative ?? 0) * 100}%／穩健 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.balanced ?? 0) * 100}%／樂觀 {Number(data.assumptions.assetReturnPresets.find((item) => item.key === resolveAssetReturnPresetKey(assetType, allocationClass))?.scenarioRates.optimistic ?? 0) * 100}%</p><label className="checkbox-row"><input type="radio" checked={assetRateMode === 'custom'} onChange={() => setAssetRateMode('custom')} />自訂此資產的三種情境報酬</label>{assetRateMode === 'custom' && <div className="form-grid three">{([['conservative', '保守年報酬（%）'], ['balanced', '穩健年報酬（%）'], ['optimistic', '比較樂觀年報酬（%）']] as const).map(([key, label]) => <label key={key}>{label}<input type="number" min="-99" max="100" step="any" required value={customRates[key]} onChange={(event) => setCustomRates({ ...customRates, [key]: event.target.value })} /><small>填年報酬率，可為 0 或負數。</small></label>)}</div>}<button className="button small secondary" type="button" onClick={() => { setAssetRateMode('system'); setApplySystemPreset(true) }}>重新套用系統預設</button></fieldset>{isMarketTrackableAssetType(assetType) && <fieldset><legend>行情追蹤</legend><label className="checkbox-row"><input type="checkbox" checked={marketTracking} onChange={(event) => setMarketTracking(event.target.checked)} />使用市場行情更新目前價值</label>{marketTracking && <div className="form-grid three"><label>上市代碼<input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} pattern="\d{4,6}[A-Z]?" placeholder="例如 0050" required /></label><label>持有數量<input name="quantity" type="number" min="0" step="any" defaultValue={editedAsset && data.holdings.find((item) => item.assetId === editedAsset.id)?.quantity} required /></label><label>所屬帳戶（選填）<select name="accountId" defaultValue={editedAsset?.accountId}><option value="">行情追蹤帳戶</option>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label></div>}<p className="muted">儲存後可直接到行情頁更新，不需要再次設定。目前支援臺灣證券交易所可取得的股票與 ETF。</p></fieldset>}<details className="advanced-settings"><summary>進階資產設定（選填）</summary><div className="context-help-row"><CalculationHelp label="可動用日期" topic="availableFrom" /><CalculationHelp label="退休使用範圍" topic="retirementScope" /></div><div className="form-grid three">
           <label>資料狀態<select name="status" defaultValue={editedAsset?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>退休使用範圍<select name="retirementUsageScope" defaultValue={editedAsset?.retirementUsageScope}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入退休</option></select></label>
           <label>可動用日期<input name="availableFrom" type="date" required defaultValue={editedAsset?.availableFrom ?? data.calculationBaseDate} /></label>
-          <label>所屬帳戶<select name="accountId" defaultValue={editedAsset?.accountId}><option value="">未指定</option>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          {!marketTracking && <label>所屬帳戶<select name="accountId" defaultValue={editedAsset?.accountId}><option value="">未指定</option>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>}
           <label>地區<select name="region" defaultValue={editedAsset?.region}><option value="">未指定</option><option value="taiwan">臺灣</option><option value="global">全球</option><option value="us">美國</option><option value="other">其他</option></select></label>
           <label>風險分類<select name="riskLevel" defaultValue={editedAsset?.riskLevel}><option value="">未指定</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
           <label>不動產地址（選填）<input name="propertyAddress" defaultValue={editedAsset?.propertyAddress} /></label>
           <label className="checkbox-row"><input name="includeInTotalAssets" type="checkbox" defaultChecked={editedAsset?.includeInTotalAssets ?? true} /><span>納入總資產</span></label>
         </div></details>{error && <div className="field-error" role="alert">{error}</div>}<div className="form-actions"><button className="button ghost" type="button" onClick={() => setAssetEditor(null)}>取消</button><button className="button primary" type="submit">儲存資產</button></div>
       </form>}
-      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{currency.format(Number(asset.currentValue.amount))}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id), holdings: data.holdings.filter((item) => item.assetId !== asset.id) })}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
+      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{currency.format(Number(asset.currentValue.amount))}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => { const instrumentIds = new Set(data.instruments.filter((item) => item.assetId === asset.id).map((item) => item.id)); void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id), holdings: data.holdings.filter((item) => item.assetId !== asset.id), instruments: data.instruments.filter((item) => item.assetId !== asset.id), marketQuotes: data.marketQuotes.filter((item) => !instrumentIds.has(item.instrumentId)) }) }}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
     </section>
 
     <section className="panel">

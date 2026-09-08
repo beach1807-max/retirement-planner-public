@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 async function navigateTo(page: Page, label: string, isMobile: boolean) {
-  if (isMobile && ['預測設定', '資料與備份', '行情更新'].includes(label)) {
+  if (isMobile && ['投資組合', '行情更新', '預測設定', '資料與備份'].includes(label)) {
     await page.getByRole('button', { name: '更多功能' }).click()
     await page.getByRole('dialog').getByRole('button', { name: label }).click()
   } else {
@@ -244,9 +244,9 @@ test('備份頁可以下載版本化 JSON', async ({ page, isMobile }) => {
   expect(download.suggestedFilename()).toMatch(/^安心退休公開版備份_\d{4}-\d{2}-\d{2}\.json$/)
 })
 
-test('可設定投資組合並檢視配置偏離', async ({ page }) => {
+test('可設定投資組合並檢視配置偏離', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '投資組合' }).click()
+  await navigateTo(page, '投資組合', isMobile)
   await expect(page.getByRole('heading', { name: /我的投資組合/ })).toBeVisible()
   await expect(page.getByText(/偏離 30.0 個百分點/)).toBeVisible()
   await page.getByLabel('股票（%）').fill('100')
@@ -275,6 +275,22 @@ test('可建立、比較與刪除不修改正式資料的情境', async ({ page,
   await expect(page.getByRole('row', { name: /額外投入測試/ })).toHaveCount(0)
 })
 
+test('預測設定以單一 Accordion 顯示摘要、保留草稿並可恢復預設', async ({ page, isMobile }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await navigateTo(page, '預測設定', isMobile)
+  const stock = page.locator('.preset-card').filter({ hasText: '股票' }).getByRole('button').first()
+  await expect(page.getByLabel('保守（%）')).toHaveCount(0)
+  await stock.click()
+  await page.getByLabel('穩健（%）').fill('7')
+  await stock.click()
+  await page.getByRole('button', { name: /債券.*2%.*3%.*4%/ }).click()
+  await expect(page.getByLabel('穩健（%）')).toHaveValue('3')
+  await page.getByRole('button', { name: /股票.*4%.*7%.*8%/ }).click()
+  await expect(page.getByLabel('穩健（%）')).toHaveValue('7')
+  await page.getByRole('button', { name: '恢復系統預設' }).click()
+  await expect(page.getByLabel('穩健（%）')).toHaveValue('6')
+})
+
 test('可手動更新官方行情與匯率並同步重算資產', async ({ page, isMobile }) => {
   await page.route('**/api/market-data?*', async (route) => route.fulfill({ json: {
     quotes: [{ symbol: '0050', price: '70', currency: 'TWD', asOf: '2026-09-02', sourceId: 'twse-openapi-v1' }],
@@ -282,12 +298,15 @@ test('可手動更新官方行情與匯率並同步重算資產', async ({ page,
     errors: [], fetchedAt: '2026-09-03T00:00:00Z',
   } }))
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
+  await page.getByLabel('使用市場行情更新目前價值').check()
+  await page.getByLabel('上市代碼').fill('0050')
+  await page.getByLabel('持有數量').fill('1000')
+  await page.getByRole('button', { name: '儲存資產', exact: true }).click()
   await navigateTo(page, '行情更新', isMobile)
-  const firstAsset = page.locator('fieldset').filter({ hasText: '退休投資帳戶' })
-  await firstAsset.getByLabel('上市代碼').fill('0050')
-  await firstAsset.getByLabel('持有數量').fill('1000')
-  await page.getByRole('button', { name: '儲存標的設定' }).click()
-  await page.getByRole('button', { name: '更新股票、ETF 與匯率' }).click()
+  await expect(page.getByText(/退休投資帳戶 · 0050/)).toBeVisible()
+  await page.getByRole('button', { name: '更新所有行情' }).click()
   await expect(page.getByText('行情與匯率更新完成。')).toBeVisible()
   await expect(page.getByText('70 TWD')).toBeVisible()
   await expect(page.getByText('31.6660')).toBeVisible()

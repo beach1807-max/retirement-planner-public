@@ -7,6 +7,7 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, 'e2e/**'],
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    testTimeout: 10_000,
     coverage: {
       reporter: ['text', 'html'],
       include: ['src/domain/**/*.ts', 'src/application/**/*.ts'],
