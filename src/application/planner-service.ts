@@ -140,6 +140,7 @@ export class PlannerService {
     const profiles = new Map(data.assumptions.returnProfiles.map((profile) => [profile.id, profile.annualReturnRate]))
     const input: ProjectionInput = {
       customScenario: options.customScenario,
+      targetRetirementMonth: data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth,
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,
       assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: asset.scenarioRates, id: asset.id, name: asset.name, currentValueTwd: moneyToTwd(data, asset.currentValue)?.toFixed(2) ?? '0', annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: moneyToTwd(data, asset.currentValue) ? asset.status : 'notProvided' })),
       contributions: data.contributions.filter((item) => !options.scope || (item.destinationAssetId && selectedIds.has(item.destinationAssetId))).map((item) => {

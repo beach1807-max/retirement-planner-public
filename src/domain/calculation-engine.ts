@@ -153,18 +153,18 @@ function warningsFor(input: CalculationInput): CalculationMessage[] {
   if (partner) {
     warnings.push({
       code: 'PARTNER_OPTIONAL_DATA_MISSING',
-      message: `${partner.name} 的收入、負債、勞保與勞退若未提供，將不納入本次計算。`,
+      message: `${partner.name} 的收入、負債、勞保與勞退若尚未設定，將不納入本次計算。`,
       entityId: partner.id,
     })
   }
   for (const asset of input.assets.filter((item) => item.status === 'notProvided')) {
-    warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `${asset.name} 尚未提供，不納入計算。`, entityId: asset.id })
+    warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `${asset.name} 尚未設定，不納入計算。`, entityId: asset.id })
   }
   return warnings
 }
 
 function includeAsset(asset: Asset, primaryMemberId: string): { included: boolean; reason?: string } {
-  if (asset.status !== 'provided') return { included: false, reason: asset.status === 'notApplicable' ? '不適用' : '尚未提供' }
+  if (asset.status !== 'provided') return { included: false, reason: asset.status === 'notApplicable' ? '不適用' : '尚未設定' }
   if (asset.retirementUsageScope === 'excluded') return { included: false, reason: '已排除退休用途' }
   if (asset.ownershipType === 'household' || asset.ownershipType === 'joint') {
     return asset.retirementUsageScope === 'household'
@@ -178,7 +178,7 @@ function includeAsset(asset: Asset, primaryMemberId: string): { included: boolea
 }
 
 function includeContribution(contribution: Contribution, primaryMemberId: string): { included: boolean; reason?: string } {
-  if (contribution.status !== 'provided') return { included: false, reason: contribution.status === 'notApplicable' ? '不適用' : '尚未提供' }
+  if (contribution.status !== 'provided') return { included: false, reason: contribution.status === 'notApplicable' ? '不適用' : '尚未設定' }
   if (contribution.sourceMemberId === primaryMemberId || contribution.usageScope === 'household') return { included: true }
   return { included: false, reason: '伴侶個人投入' }
 }

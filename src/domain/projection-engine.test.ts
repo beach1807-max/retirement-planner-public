@@ -36,12 +36,42 @@ describe('固定期間投資與勞退預測', () => {
     expect(totals[1]).toBeLessThan(totals[2])
   })
 
+  it('回傳每個情境實際採用的投資與勞退年報酬率', async () => {
+    const input = fixture()
+    input.assets[0].scenarioRates = { conservative: '0.01', balanced: '0.05', optimistic: '0.09' }
+    input.contributions[0].annualReturnRate = '0.07'
+    const result = await projectRetirement(input)
+    expect(result.scenarios[1].investmentAnnualReturnRates).toEqual(['0.05', '0.07'])
+    expect(result.scenarios[1].laborPensionAnnualReturnRates).toEqual(['0.03'])
+  })
+
+  it('計算非固定、與固定期間重疊及超過 35 年的目標退休時間', async () => {
+    for (const targetRetirementMonth of ['2048-06', '2046-09', '2064-03']) {
+      const input = fixture()
+      input.targetRetirementMonth = targetRetirementMonth
+      const result = await projectRetirement(input)
+      expect(result.targetRetirementMonth).toBe(targetRetirementMonth)
+      expect(result.scenarios.every((scenario) => scenario.targetRetirementMilestone?.month === targetRetirementMonth)).toBe(true)
+      expect(result.scenarios.every((scenario) => scenario.milestones.length === 6)).toBe(true)
+    }
+  })
+
+  it('目標退休時間早於計算基準或缺少時不建立退休節點', async () => {
+    const input = fixture()
+    input.targetRetirementMonth = '2026-08'
+    const result = await projectRetirement(input)
+    expect(result.targetRetirementMonth).toBeUndefined()
+    expect(result.scenarios.every((scenario) => scenario.targetRetirementMilestone === undefined)).toBe(true)
+    const withoutTarget = await projectRetirement(fixture())
+    expect(withoutTarget.targetRetirementMonth).toBeUndefined()
+  })
+
   it('未提供的投資資料不視為零並產生提醒', async () => {
     const input = fixture()
     input.assets[0].status = 'notProvided'
     const result = await projectRetirement(input)
     expect(result.includedAssetIds).toEqual([])
-    expect(result.excludedAssets[0].reason).toContain('尚未提供')
+    expect(result.excludedAssets[0].reason).toContain('尚未設定')
     expect(result.warnings[0].code).toBe('ASSET_NOT_PROVIDED')
   })
 })

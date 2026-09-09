@@ -11,28 +11,36 @@ const SCENARIOS: Array<Pick<ProjectionScenario, 'id' | 'label' | 'returnAdjustme
 ]
 
 const money = (value: Decimal) => value.toDecimalPlaces(2).toFixed(2)
+const adjustedAnnualRate = (annualRate: string, adjustment: string) => Decimal.max('-.99', new Decimal(annualRate).plus(adjustment))
 const adjustedMonthlyRate = (annualRate: string, adjustment: string) => {
-  const rate = Decimal.max('-.99', new Decimal(annualRate).plus(adjustment))
+  const rate = adjustedAnnualRate(annualRate, adjustment)
   return new Decimal(1).plus(rate).pow(new Decimal(1).div(12)).minus(1)
 }
 
+function assetAnnualRate(asset: { annualReturnRate: string; scenarioRates?: AssetScenarioRates }, scenario: Pick<ProjectionScenario, 'id' | 'returnAdjustment'>) {
+  if (!asset.scenarioRates) return adjustedAnnualRate(asset.annualReturnRate, scenario.returnAdjustment)
+  return scenario.id === 'custom' ? adjustedAnnualRate(asset.scenarioRates.balanced, scenario.returnAdjustment) : new Decimal(asset.scenarioRates[scenario.id])
+}
+
 function assetMonthlyRate(asset: { annualReturnRate: string; scenarioRates?: AssetScenarioRates }, scenario: Pick<ProjectionScenario, 'id' | 'returnAdjustment'>) {
-  if (!asset.scenarioRates) return adjustedMonthlyRate(asset.annualReturnRate, scenario.returnAdjustment)
-  return scenario.id === 'custom' ? adjustedMonthlyRate(asset.scenarioRates.balanced, scenario.returnAdjustment) : adjustedMonthlyRate(asset.scenarioRates[scenario.id], '0')
+  return new Decimal(1).plus(assetAnnualRate(asset, scenario)).pow(new Decimal(1).div(12)).minus(1)
 }
 
 export async function projectRetirement(input: ProjectionInput): Promise<ProjectionResult> {
   if (input.contractVersion !== 'projection-contract-v0.2') throw new Error('UNSUPPORTED_PROJECTION_CONTRACT')
   const baseMonth = toMonth(input.calculationBaseDate)
+  const targetRetirementMonth = input.targetRetirementMonth && monthIndex(input.targetRetirementMonth) >= monthIndex(baseMonth)
+    ? toMonth(input.targetRetirementMonth)
+    : undefined
   const inflation = new Decimal(input.annualInflationRate)
   if (inflation.lte(-1)) throw new Error('INVALID_INFLATION_RATE')
 
   const warnings: CalculationMessage[] = []
   const assets = input.assets.filter((asset) => asset.status === 'provided')
-  const excludedAssets = input.assets.filter((asset) => asset.status !== 'provided').map((asset) => ({ id: asset.id, reason: asset.status === 'notProvided' ? '資產金額尚未提供' : '資產標記為不適用' }))
-  input.assets.filter((asset) => asset.status === 'notProvided').forEach((asset) => warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `投資資產「${asset.name}」尚未提供。`, entityId: asset.id }))
-  input.contributions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'CONTRIBUTION_NOT_PROVIDED', message: `投入「${item.id}」尚未提供。`, entityId: item.id }))
-  input.laborPensions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'LABOR_PENSION_NOT_PROVIDED', message: `${item.memberName}的勞退資料尚未提供。`, entityId: item.id }))
+  const excludedAssets = input.assets.filter((asset) => asset.status !== 'provided').map((asset) => ({ id: asset.id, reason: asset.status === 'notProvided' ? '資產金額尚未設定' : '資產標記為不適用' }))
+  input.assets.filter((asset) => asset.status === 'notProvided').forEach((asset) => warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `投資資產「${asset.name}」尚未設定。`, entityId: asset.id }))
+  input.contributions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'CONTRIBUTION_NOT_PROVIDED', message: `投入「${item.id}」尚未設定。`, entityId: item.id }))
+  input.laborPensions.filter((item) => item.status === 'notProvided').forEach((item) => warnings.push({ code: 'LABOR_PENSION_NOT_PROVIDED', message: `${item.memberName}的勞退資料尚未設定。`, entityId: item.id }))
 
   if (input.customScenario) {
     const adjustment = new Decimal(input.customScenario.returnAdjustment)
@@ -45,7 +53,15 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
     const pensionBalances = input.laborPensions.filter((item) => item.status === 'provided').map((item) => ({ ...item, balance: new Decimal(item.currentBalanceTwd) }))
     const milestoneByMonth = new Map<number, typeof HORIZONS[number]>(HORIZONS.map((years) => [monthIndex(addMonths(baseMonth, years * 12)), years]))
     const milestones: ProjectionScenario['milestones'] = []
-    const lastIndex = monthIndex(addMonths(baseMonth, HORIZONS.at(-1)! * 12))
+    let targetRetirementMilestone: ProjectionScenario['targetRetirementMilestone']
+    const lastIndex = Math.max(monthIndex(addMonths(baseMonth, HORIZONS.at(-1)! * 12)), targetRetirementMonth ? monthIndex(targetRetirementMonth) : 0)
+
+    const investmentAnnualReturnRates = [...new Set([...assets, ...input.contributions.filter((item) => item.status === 'provided')]
+      .map((item) => assetAnnualRate(item, scenario).toString()))].sort((a, b) => new Decimal(a).cmp(b))
+    const laborPensionAnnualReturnRates = [...new Set(input.laborPensions.filter((item) => item.status === 'provided').map((item) => {
+      const adjustment = scenario.id === 'custom' && !input.customScenario?.adjustLaborPension ? '0' : scenario.returnAdjustment
+      return adjustedAnnualRate(item.annualReturnRate, adjustment).toString()
+    }))].sort((a, b) => new Decimal(a).cmp(b))
 
     for (let cursor = monthIndex(baseMonth); cursor <= lastIndex; cursor += 1) {
       const month = addMonths(baseMonth, cursor - monthIndex(baseMonth))
@@ -63,16 +79,20 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
       }
 
       const years = milestoneByMonth.get(cursor)
-      if (years) {
+      const isTargetRetirement = month === targetRetirementMonth
+      if (years || isTargetRetirement) {
         const investment = investmentBalances.reduce((sum, item) => sum.plus(item.active ? item.balance : ZERO), ZERO).plus(contributionBalances.reduce((sum, item) => sum.plus(item.balance), ZERO))
         const laborPension = pensionBalances.reduce((sum, item) => sum.plus(item.balance), ZERO)
         const total = investment.plus(laborPension)
-        const real = total.div(new Decimal(1).plus(inflation).pow(years))
-        milestones.push({ yearsFromNow: years, month, investmentAssetsNominal: money(investment), laborPensionAssetsNominal: money(laborPension), totalAssetsNominal: money(total), totalAssetsReal: money(real) })
+        const elapsedYears = new Decimal(cursor - monthIndex(baseMonth)).div(12)
+        const real = total.div(new Decimal(1).plus(inflation).pow(elapsedYears))
+        const values = { month, investmentAssetsNominal: money(investment), laborPensionAssetsNominal: money(laborPension), totalAssetsNominal: money(total), totalAssetsReal: money(real) }
+        if (years) milestones.push({ yearsFromNow: years, ...values })
+        if (isTargetRetirement) targetRetirementMilestone = values
       }
     }
-    return { ...scenario, milestones }
+    return { ...scenario, investmentAnnualReturnRates, laborPensionAnnualReturnRates, milestones, targetRetirementMilestone }
   })
 
-  return { contractVersion: 'projection-contract-v0.2', calculationBaseDate: input.calculationBaseDate, inflationRate: input.annualInflationRate, horizons: [...HORIZONS], scenarios, warnings, includedAssetIds: assets.map((asset) => asset.id), excludedAssets }
+  return { contractVersion: 'projection-contract-v0.2', calculationBaseDate: input.calculationBaseDate, inflationRate: input.annualInflationRate, horizons: [...HORIZONS], targetRetirementMonth, scenarios, warnings, includedAssetIds: assets.map((asset) => asset.id), excludedAssets }
 }

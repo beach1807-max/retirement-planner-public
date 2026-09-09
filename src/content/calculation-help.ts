@@ -7,14 +7,14 @@ export interface CalculationHelpContent {
 }
 
 export const calculationHelp = {
-  investmentAssets: { title: '投資資產', summary: '只包含投資組合中明確選取、狀態為已提供且幣別為 TWD 的資產。未選取的不動產、保險或其他資產仍可計入總資產，但不會自動進入未來預測。', version: 'projection-contract-v0.2' },
+  investmentAssets: { title: '投資資產', summary: '只包含投資組合中明確選取、狀態為已設定且幣別為 TWD 的資產。未選取的不動產、保險或其他資產仍可計入總資產，但不會自動進入未來預測。', version: 'projection-contract-v0.2' },
   nominalValue: { title: '名目金額', summary: '依設定報酬率複利後的未來帳面金額，尚未扣除物價上漲的影響。', note: '適合查看未來帳面數字；若要比較生活水準，請看今天購買力。' },
   purchasingPower: { title: '今天購買力', summary: '把未來名目金額依通膨率折算成今天相近的購買能力。', formula: '今天購買力 = 未來名目金額 ÷ (1 + 年通膨率)^年數', version: 'projection-contract-v0.2' },
   forecastScenarios: { title: '預設與自訂報酬情境', summary: '各情境使用相同本金與投入計畫。資產若自行設定三種年報酬，就直接採用；其他資產及勞退維持預設調整。指定資產的投入沿用該資產設定。', formula: '保守 = 原報酬率 − 2 個百分點；穩健 = 原報酬率；比較樂觀 = 原報酬率 + 2 個百分點；自訂 = 原報酬率 + 輸入的百分點', note: '上列加減公式適用未自行設定的資產；第四個自訂情境一律以各資產穩健報酬加減，例：穩健 6%，自訂 +1 後為 7%。可選是否同步調整勞退。最低有效年報酬為 -99%。情境不代表機率或最差／最好結果。' },
   laborInsurance: { title: '勞保老年年金', summary: '屬於未來每月退休收入，不是目前持有的資產，因此不加入投資資產或總資產。月領金額依兩式擇優，再套用提前或展延調整。', version: 'tw-labor-rules-2026-08-20' },
   laborPension: { title: '勞退專戶', summary: '從目前專戶餘額開始，依月提繳工資、雇主提繳率、自提率及報酬率逐月累積。首頁會將它列入未來資產並與一般投資分開顯示。', formula: '月底餘額 = 上月底餘額 × (1 + 月報酬率) + 當月提繳', note: '到請領月份後保留請領時點價值，不推測後續提領、消費或再投資。' },
-  totalAssets: { title: '總資產', summary: '加總所有勾選「納入總資產」、狀態為已提供且幣別為 TWD 的資產。家庭檢視中的共同資產只計一次。', note: '總資產的範圍通常比投資預測本金更大。' },
-  totalLiabilities: { title: '總負債', summary: '加總所有狀態為已提供且幣別為 TWD 的負債目前餘額。個人檢視會依所有權與共同持分計算。' },
+  totalAssets: { title: '總資產', summary: '加總所有勾選「納入總資產」、狀態為已設定且幣別為 TWD 的資產。家庭檢視中的共同資產只計一次。', note: '總資產的範圍通常比投資預測本金更大。' },
+  totalLiabilities: { title: '總負債', summary: '加總所有狀態為已設定且幣別為 TWD 的負債目前餘額。個人檢視會依所有權與共同持分計算。' },
   netWorth: { title: '淨資產', summary: '表示目前資產扣除目前負債後的金額。', formula: '淨資產 = 總資產 − 總負債', note: '目前固定期間投資預測不會自動從未來投資資產扣除負債。' },
   assetAllocation: { title: '投資配置分類', summary: '依資產實際曝險分為股票、債券、貨幣市場、現金及其他。ETF 或基金須依其實際投資內容分類，商品名稱本身不等於配置類別。' },
   currentAllocation: { title: '目前配置', summary: '依投資組合所選資產的最新有效市值計算各類別所占比例。', formula: '目前配置比例 = 該類別市值 ÷ 投資組合總市值' },

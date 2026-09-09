@@ -204,6 +204,13 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
 .labor-system-grid span, .labor-system-grid small { color: var(--muted); }
 .labor-system-grid strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .secondary-summary { background: #fafcfb; box-shadow: none; }
+.forecast-controls { border-top: 4px solid var(--primary); }
+.scenario-options { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: .8rem; }
+.scenario-options summary { color: var(--primary); cursor: pointer; font-weight: 700; }
+.scenario-options[open] summary { margin-bottom: .8rem; }
+.projection-table .baseline-scenario { background: #edf7f2; }
+.projection-table thead .baseline-scenario { box-shadow: inset 0 3px 0 var(--primary); }
+.projection-table th small { display: block; margin-top: .3rem; font-weight: 500; }
 .scenario-table-wrap { overflow-x: auto; }
 .scenario-table { width: 100%; border-collapse: collapse; min-width: 880px; }
 .scenario-table th, .scenario-table td { padding: 13px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; font-variant-numeric: tabular-nums; }

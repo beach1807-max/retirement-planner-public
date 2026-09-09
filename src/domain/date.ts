@@ -27,6 +27,10 @@ export function monthsBetween(from: string, to: string): number {
   return monthIndex(to) - monthIndex(from)
 }
 
+export function ageAtMonth(birthDate: string, month: string): number {
+  return Math.floor(monthsBetween(birthDate, month) / 12)
+}
+
 export function isMonthBetween(value: string, start: string, end: string): boolean {
   const current = monthIndex(value)
   return current >= monthIndex(start) && current <= monthIndex(end)
