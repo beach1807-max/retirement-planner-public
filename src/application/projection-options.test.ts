@@ -17,7 +17,7 @@ describe('預測篩選與勞退模式', () => {
     const result = await service.project(restored, options)
     expect(Number(result.scenarios[2].milestones[0].investmentAssetsNominal)).toBeCloseTo(Number(asset.currentValue.amount) * 1.005 ** 10, 2)
     expect(result.scenarios[3].milestones).toEqual(result.scenarios[1].milestones)
-    data.contributions = [{ ...createDemoData('2026-09-01').contributions[0], destinationAssetId: asset.id, startDate: '2026-09-01', endRule: 'planEnd', amount: { amount: '100', currency: 'TWD' } }]
+    data.contributions = [{ ...createDemoData('2026-09-01').contributions[0], sourceMemberId: data.members[0].id, householdId: data.household.id, destinationAssetId: asset.id, startDate: '2026-09-01', endRule: 'planEnd', amount: { amount: '100', currency: 'TWD' } }]
     const withContribution = await service.project(data, options)
     expect(Number(withContribution.scenarios[1].milestones[0].investmentAssetsNominal)).toBe(Number(asset.currentValue.amount) + 12100)
     asset.scenarioRates.optimistic = '-0.02'

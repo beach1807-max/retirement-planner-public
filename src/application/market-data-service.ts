@@ -21,7 +21,7 @@ export class MarketDataService {
         const fx = quote.currency === 'TWD' ? new Decimal(1) : new Decimal(batch.rates.find((item) => item.fromCurrency === quote.currency && item.toCurrency === 'TWD')?.rate ?? NaN)
         if (!fx.isFinite()) { batch.errors.push({ instrumentId: quote.instrumentId, message: `${quote.symbol} 缺少 ${quote.currency}/TWD 匯率，保留原市值。` }); continue }
         const totalQuantity = holdings.reduce((sum, holding) => sum.plus(holding.quantity), new Decimal(0))
-        asset.currentValue = { amount: totalQuantity.mul(quote.price).mul(fx).toDecimalPlaces(2).toFixed(2), currency: 'TWD' }
+        asset.currentValue = { amount: totalQuantity.mul(quote.price).toDecimalPlaces(2).toFixed(2), currency: quote.currency }
         asset.updatedAt = batch.fetchedAt
         updatedAssetIds.push(asset.id)
       }

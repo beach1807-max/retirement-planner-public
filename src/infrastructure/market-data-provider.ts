@@ -21,8 +21,7 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
     if (!response.ok) throw new Error(`MARKET_PROVIDER_HTTP_${response.status}`)
     const payload = await response.json() as ApiResponse
     const quotes = payload.quotes.flatMap((quote) => {
-      const instrument = supported.find((item) => item.symbol === quote.symbol)
-      return instrument ? [{ ...quote, instrumentId: instrument.id }] : []
+      return supported.filter((item) => item.symbol === quote.symbol).map((instrument) => ({ ...quote, instrumentId: instrument.id }))
     })
     const missing = supported.filter((item) => !quotes.some((quote) => quote.instrumentId === item.id)).map((item) => ({ instrumentId: item.id, message: `${item.symbol} 查無最新有效收盤價。` }))
     const apiErrors = (payload.errors ?? []).map((error) => ({ instrumentId: supported.find((item) => item.symbol === error.symbol)?.id, message: error.message }))

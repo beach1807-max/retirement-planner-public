@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js'
+import { moneyToTwd } from './money'
 import { sha256 } from '../domain/canonical'
 import { monthsBetween } from '../domain/date'
 import type { ProjectionResult } from '../domain/models'
@@ -15,12 +16,12 @@ function applyRebalance(data: PlannerData, targetWeights: NonNullable<PlannerSce
   if (!portfolio) return
   const total = targetWeights.reduce((sum, item) => sum.plus(item.targetWeight), new Decimal(0))
   if (!total.eq(1) || targetWeights.some((item) => new Decimal(item.targetWeight).lt(0))) throw new Error('SCENARIO_REBALANCE_INVALID_TARGET')
-  const assets = data.assets.filter((asset) => portfolio.assetIds.includes(asset.id) && asset.status === 'provided' && asset.currentValue.currency === 'TWD' && asset.allocationClass)
-  const value = assets.reduce((sum, asset) => sum.plus(asset.currentValue.amount), new Decimal(0))
+  const assets = data.assets.filter((asset) => portfolio.assetIds.includes(asset.id) && asset.status === 'provided' && moneyToTwd(data, asset.currentValue) !== null && asset.allocationClass)
+  const value = assets.reduce((sum, asset) => sum.plus(moneyToTwd(data, asset.currentValue)!), new Decimal(0))
   for (const target of targetWeights) {
     const classAssets = assets.filter((asset) => asset.allocationClass === target.assetClass)
     if (new Decimal(target.targetWeight).gt(0) && (classAssets.length === 0 || classAssets.every((asset) => new Decimal(asset.currentValue.amount).eq(0)))) throw new Error('SCENARIO_REBALANCE_CLASS_MISSING_ASSET')
-    const classValue = classAssets.reduce((sum, asset) => sum.plus(asset.currentValue.amount), new Decimal(0))
+    const classValue = classAssets.reduce((sum, asset) => sum.plus(moneyToTwd(data, asset.currentValue)!), new Decimal(0))
     if (classAssets.length && classValue.gt(0)) for (const asset of classAssets) asset.currentValue.amount = value.mul(target.targetWeight).mul(asset.currentValue.amount).div(classValue).toString()
   }
 }
@@ -36,7 +37,7 @@ export function applyScenario(data: PlannerData, scenario: PlannerScenario): Pla
   for (const item of override.contributionOverrides ?? []) {
     const contribution = next.contributions.find((candidate) => candidate.id === item.contributionId)
     if (!contribution) throw new Error('SCENARIO_CONTRIBUTION_NOT_FOUND')
-    if (item.amountTwd !== undefined) contribution.amount.amount = item.amountTwd
+    if (item.amountTwd !== undefined) contribution.amount = { amount: item.amountTwd, currency: 'TWD' }
     if (item.startDate !== undefined) contribution.startDate = item.startDate
     if (item.endRule !== undefined) contribution.endRule = item.endRule
     if (item.endDate !== undefined) contribution.endDate = item.endDate

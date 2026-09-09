@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -5,6 +6,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   plugins: [
     react(),
+    { name: 'build-version', generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-version.json', source: JSON.stringify({ project: 'retirement-planner-public', version: 'PUBLIC', commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), branch: execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim() }) })
+    } },
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['favicon.svg'],

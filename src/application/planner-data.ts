@@ -33,6 +33,7 @@ export interface PlannerAsset extends EntityTimestamps, OwnershipFields {
 }
 
 export interface PlannerContribution extends EntityTimestamps {
+  name?: string
   id: string
   householdId: string
   sourceMemberId: string

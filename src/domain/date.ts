@@ -32,3 +32,8 @@ export function isMonthBetween(value: string, start: string, end: string): boole
   return current >= monthIndex(start) && current <= monthIndex(end)
 }
 
+/** 舊 YYYY-MM 為不含該月的停止月份；完整結束日期包含當月（按月投入，不按日拆分）。 */
+export function fixedContributionEndMonth(endDate: string): string {
+  return endDate.length === 10 ? addMonths(endDate, 1) : toMonth(endDate)
+}
+

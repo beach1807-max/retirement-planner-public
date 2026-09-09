@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js'
+import { fixedContributionEndMonth } from './date'
 import { sha256 } from './canonical'
 import { addMonths, isMonthBetween, monthIndex, monthsBetween, toMonth } from './date'
 import type {
@@ -191,7 +192,7 @@ function contributionIsActive(
 ): boolean {
   const start = toMonth(contribution.startDate)
   let end = planEndMonth
-  if (contribution.endRule === 'fixedDate' && contribution.endDate) end = toMonth(contribution.endDate)
+  if (contribution.endRule === 'fixedDate' && contribution.endDate) end = addMonths(fixedContributionEndMonth(contribution.endDate), -1)
   if (contribution.endRule === 'primaryRetirement') end = addMonths(candidateRetirementMonth, -1)
   if (contribution.endRule === 'ownerRetirement') {
     const owner = input.members.find((member) => member.id === contribution.sourceMemberId)

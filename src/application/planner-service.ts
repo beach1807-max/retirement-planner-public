@@ -1,8 +1,10 @@
 import Decimal from 'decimal.js'
+import { moneyToTwd } from './money'
+import { contributionActiveInMonth, contributionEndMonth } from './contribution-period'
 import { addMonths } from '../domain/date'
 import { calculateRetirement } from '../domain/calculation-engine'
 import { projectRetirement } from '../domain/projection-engine'
-import { estimateRetirementSystem, TAIWAN_LABOR_RULES_2026, type RetirementSystemEstimate } from '../domain/retirement-system'
+import { estimateRetirementSystem, retirementEligibilityAtMonth, TAIWAN_LABOR_RULES_2026, type RetirementSystemEstimate } from '../domain/retirement-system'
 import { calculateRebalancing, type RebalancingResult } from '../domain/rebalancing-engine'
 import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member, ProjectionInput, ProjectionResult } from '../domain/models'
 import type { PlannerRepository } from '../infrastructure/planner-repository'
@@ -17,6 +19,7 @@ export interface ProjectionOptions {
 export interface DashboardViewModel { scope: DashboardScope; totalAssetsTwd: string; totalLiabilitiesTwd: string; netWorthTwd: string; assetCount: number; liabilityCount: number; missingDataCount: number; retirementResultScopeLabel: string }
 export interface RetirementSystemView { memberId: string; memberName: string; status: PlannerData['retirementSystems'][number]['status']; laborInsuranceEnabled: boolean; laborPensionEnabled: boolean; estimate: RetirementSystemEstimate | null }
 export interface FinancialOverview {
+  missingFxCurrencies: string[]
   household: { monthlyIncomeTwd?: string; monthlyExpenseTwd?: string; monthlyDebtPaymentTwd?: string; monthlyContributionTwd?: string; unallocatedTwd?: string }
   assets: { totalTwd: string; liabilitiesTwd: string; netWorthTwd: string }
   accountCount: number
@@ -100,21 +103,22 @@ export function validatePlannerData(data: PlannerData): void {
     if (data.instruments.some((item) => item.id !== instrument.id && item.assetId === instrument.assetId)) throw new Error('DUPLICATE_ASSET_INSTRUMENT')
   }
   for (const quote of data.marketQuotes) if (!data.instruments.some((item) => item.id === quote.instrumentId) || new Decimal(quote.price).lt(0)) throw new Error('INVALID_MARKET_QUOTE')
-  for (const rate of data.exchangeRates) if (rate.toCurrency !== 'TWD' || new Decimal(rate.rate).lte(0)) throw new Error('INVALID_EXCHANGE_RATE')
+  for (const rate of data.exchangeRates) if (rate.toCurrency !== 'TWD' || !new Decimal(rate.rate).isFinite() || new Decimal(rate.rate).lte(0)) throw new Error('INVALID_EXCHANGE_RATE')
   for (const contribution of data.contributions) {
-    if (!/^[A-Z]{3}$/.test(contribution.amount.currency)) throw new Error('INVALID_CURRENCY')
-    if (contribution.endRule === 'fixedDate' && (!contribution.endDate || contribution.endDate < contribution.startDate.slice(0, 7))) throw new Error('INVALID_CONTRIBUTION_END_DATE')
+    validateMoney(contribution.amount)
+    if (!memberIds.has(contribution.sourceMemberId)) throw new Error('INVALID_CONTRIBUTION_MEMBER')
+    if (contribution.endRule === 'fixedDate' && (!contribution.endDate || contribution.endDate < (contribution.endDate.length === 10 ? contribution.startDate : contribution.startDate.slice(0, 7)))) throw new Error('INVALID_CONTRIBUTION_END_DATE')
     if (Boolean(contribution.destinationAssetId) === Boolean(contribution.returnProfileId)) throw new Error('INVALID_CONTRIBUTION_DESTINATION')
   }
 }
 
 export function toCalculationInputV01(data: PlannerData): CalculationInput {
   validatePlannerData(data)
-  if (data.assets.some((item) => item.currentValue.currency !== 'TWD') || data.contributions.some((item) => item.amount.currency !== 'TWD')) throw new Error('FX_RATE_REQUIRED')
+  if (data.assets.some((item) => item.status === 'provided' && !moneyToTwd(data, item.currentValue)) || data.contributions.some((item) => item.status === 'provided' && !moneyToTwd(data, item.amount))) throw new Error('FX_RATE_REQUIRED')
   const stripHousehold = (item: PlannerData['household']): Household => ({ id: item.id, name: item.name, baseCurrency: item.baseCurrency, primaryMemberId: item.primaryMemberId })
   const stripMember = (item: PlannerData['members'][number]): Member => ({ id: item.id, householdId: item.householdId, name: item.name, role: item.role, birthDate: item.birthDate, planningEndAge: item.planningEndAge, plannedRetirementMonth: item.plannedRetirementMonth, isActive: item.isActive })
-  const assets: Asset[] = data.assets.map((item) => ({ id: item.id, householdId: item.householdId, name: item.name, assetType: item.assetType === 'cash' || item.assetType === 'timeDeposit' ? 'cash' : item.assetType === 'stock' || item.assetType === 'etf' || item.assetType === 'stockEtf' ? 'stockEtf' : 'other', ownershipType: item.ownershipType, ownerMemberId: item.ownerMemberId, owners: item.owners, currentValueTwd: item.currentValue.amount, includeInTotalAssets: item.includeInTotalAssets, retirementUsageScope: item.retirementUsageScope, availableFrom: item.availableFrom, returnProfileId: item.returnProfileId, status: item.status }))
-  const contributions: Contribution[] = data.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.amount, usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status }))
+  const assets: Asset[] = data.assets.map((item) => ({ id: item.id, householdId: item.householdId, name: item.name, assetType: item.assetType === 'cash' || item.assetType === 'timeDeposit' ? 'cash' : item.assetType === 'stock' || item.assetType === 'etf' || item.assetType === 'stockEtf' ? 'stockEtf' : 'other', ownershipType: item.ownershipType, ownerMemberId: item.ownerMemberId, owners: item.owners, currentValueTwd: item.currentValue.currency === 'TWD' ? item.currentValue.amount : moneyToTwd(data, item.currentValue)?.toFixed(2) ?? '0', includeInTotalAssets: item.includeInTotalAssets, retirementUsageScope: item.retirementUsageScope, availableFrom: item.availableFrom, returnProfileId: item.returnProfileId, status: item.status }))
+  const contributions: Contribution[] = data.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.currency === 'TWD' ? item.amount.amount : moneyToTwd(data, item.amount)?.toFixed(2) ?? '0', usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status }))
   return { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${data.household.id}`, calculationBaseDate: data.calculationBaseDate, household: stripHousehold(data.household), members: data.members.map(stripMember), assets, contributions, retirementPlan: data.retirementPlan, assumptions: data.assumptions, ruleVersion: data.ruleVersion }
 }
 
@@ -137,12 +141,10 @@ export class PlannerService {
     const input: ProjectionInput = {
       customScenario: options.customScenario,
       contractVersion: 'projection-contract-v0.2', calculationBaseDate: data.calculationBaseDate, annualInflationRate: data.assumptions.annualInflationRate,
-      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: asset.scenarioRates, id: asset.id, name: asset.name, currentValueTwd: asset.currentValue.amount, annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: asset.currentValue.currency === 'TWD' ? asset.status : 'notProvided' })),
+      assets: data.assets.filter((asset) => selectedIds.has(asset.id)).map((asset) => ({ scenarioRates: asset.scenarioRates, id: asset.id, name: asset.name, currentValueTwd: moneyToTwd(data, asset.currentValue)?.toFixed(2) ?? '0', annualReturnRate: profiles.get(asset.returnProfileId ?? '') ?? '0', availableFrom: asset.availableFrom, status: moneyToTwd(data, asset.currentValue) ? asset.status : 'notProvided' })),
       contributions: data.contributions.filter((item) => !options.scope || (item.destinationAssetId && selectedIds.has(item.destinationAssetId))).map((item) => {
-        const ownerRetirement = data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth
-        const primaryRetirement = data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth
         const destinationRate = item.destinationAssetId ? profiles.get(data.assets.find((asset) => asset.id === item.destinationAssetId)?.returnProfileId ?? '') : profiles.get(item.returnProfileId ?? '')
-        return { scenarioRates: item.destinationAssetId ? data.assets.find((asset) => asset.id === item.destinationAssetId)?.scenarioRates : undefined, id: item.id, amountTwd: item.amount.amount, annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: item.endRule === 'fixedDate' ? item.endDate : item.endRule === 'ownerRetirement' ? ownerRetirement : item.endRule === 'primaryRetirement' ? primaryRetirement : undefined, status: item.amount.currency === 'TWD' ? item.status : 'notProvided' }
+        return { scenarioRates: item.destinationAssetId ? data.assets.find((asset) => asset.id === item.destinationAssetId)?.scenarioRates : undefined, id: item.id, amountTwd: moneyToTwd(data, item.amount)?.toFixed(2) ?? '0', annualReturnRate: destinationRate ?? '0', startMonth: item.startDate.slice(0, 7), endMonth: contributionEndMonth(data, item), status: moneyToTwd(data, item.amount) ? item.status : 'notProvided' }
       }),
       laborPensions: (options.scope ? [] : data.retirementSystems).map((record) => {
         const member = data.members.find((item) => item.id === record.memberId)
@@ -151,6 +153,9 @@ export class PlannerService {
       }),
     }
     const result = await projectRetirement(input)
+    for (const asset of data.assets.filter((item) => selectedIds.has(item.id) && item.status === 'provided' && !moneyToTwd(data, item.currentValue))) {
+      result.warnings.push({ code: 'FX_RATE_REQUIRED', message: '資產「' + asset.name + '」缺少 ' + asset.currentValue.currency + '/TWD 匯率，尚未納入合計；請至行情更新或編輯資產填寫匯率。', entityId: asset.id })
+    }
     const unresolvedContributionEnds = data.contributions.filter((item) => input.contributions.some((included) => included.id === item.id) && item.status === 'provided' && ((item.endRule === 'ownerRetirement' && !data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth) || (item.endRule === 'primaryRetirement' && !data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth)))
     unresolvedContributionEnds.forEach((item) => result.warnings.push({ code: 'CONTRIBUTION_END_UNRESOLVED', message: `投入「${item.id}」未設定可解析的停止月份，本次持續計算至 35 年後。`, entityId: item.id }))
     if (!options.scope && data.assets.some((asset) => selectedIds.has(asset.id) && asset.assetType === 'retirementAccount') && data.retirementSystems.some((record) => record.status === 'provided' && record.laborPension.enabled)) result.warnings.push({ code: 'LABOR_PENSION_DUPLICATE_RISK', message: '投資組合同時包含退休帳戶與勞退專戶，請確認兩者不是同一筆餘額。' })
@@ -167,26 +172,34 @@ export class PlannerService {
       return { memberId: member.id, memberName: member.name, status: record.status, laborInsuranceEnabled: record.laborInsurance.enabled, laborPensionEnabled: record.laborPension.enabled, estimate }
     })
   }
+  retirementEligibility(data: PlannerData, memberId: string, month: string) {
+    const member = data.members.find((item) => item.id === memberId)
+    const record = data.retirementSystems.find((item) => item.memberId === memberId)
+    if (!member || !record || record.status !== 'provided') return null
+    return retirementEligibilityAtMonth({ birthDate: member.birthDate, calculationBaseDate: data.calculationBaseDate, month, insuredYears: record.laborInsurance.insuredYears, insuranceClaimAge: record.laborInsurance.claimAge, contributionYears: record.laborPension.contributionYears, pensionClaimAge: record.laborPension.claimAge, pensionContributing: new Decimal(record.laborPension.monthlyContributionSalaryTwd).gt(0) })
+  }
   laborRuleVersion() { return TAIWAN_LABOR_RULES_2026 }
   portfolio(data: PlannerData, portfolioId?: string): RebalancingResult | null {
     const portfolio = portfolioId ? data.portfolios.find((item) => item.id === portfolioId) : data.portfolios[0]
     if (!portfolio) return null
     const allocations = portfolio.assetIds.flatMap((id) => {
       const asset = data.assets.find((item) => item.id === id)
-      if (!asset || asset.status !== 'provided' || asset.currentValue.currency !== 'TWD') return []
-      return [{ assetClass: asset.allocationClass ?? 'other', valueTwd: asset.currentValue.amount }]
+      if (!asset || asset.status !== 'provided') return []
+      const value = moneyToTwd(data, asset.currentValue)
+      return value ? [{ assetClass: asset.allocationClass ?? 'other', valueTwd: value.toFixed(2) }] : []
     })
     return calculateRebalancing({ allocations, targets: portfolio.targets, driftThreshold: portfolio.driftThreshold })
   }
   dashboard(data: PlannerData, scope: DashboardScope): DashboardViewModel {
     const member = data.members.find((item) => item.role === scope)
     const scopedValue = (money: MoneyAmount, item: OwnershipFields) => {
-      if (money.currency !== 'TWD') return null
-      if (scope === 'household') return new Decimal(money.amount)
+      const converted = moneyToTwd(data, money)
+      if (!converted) return null
+      if (scope === 'household') return converted
       if (!member || item.ownershipType === 'household') return null
-      if (item.ownershipType === 'individual') return item.ownerMemberId === member.id ? new Decimal(money.amount) : null
+      if (item.ownershipType === 'individual') return item.ownerMemberId === member.id ? converted : null
       const share = item.owners?.find((owner) => owner.memberId === member.id)?.share
-      return share ? new Decimal(money.amount).mul(share) : null
+      return share ? converted.mul(share) : null
     }
     const assets = data.assets.flatMap((asset) => asset.includeInTotalAssets && asset.status === 'provided' ? [scopedValue(asset.currentValue, asset)].filter((value): value is Decimal => value !== null) : [])
     const liabilities = data.liabilities.flatMap((item) => item.status === 'provided' ? [scopedValue(item.currentBalance, item)].filter((value): value is Decimal => value !== null) : [])
@@ -199,27 +212,19 @@ export class PlannerService {
     const total = (items: Array<{ status: PlannerData['assets'][number]['status']; monthlyAmount?: MoneyAmount; monthlyPayment?: MoneyAmount }>, field: 'monthlyAmount' | 'monthlyPayment') => {
       const provided = items.filter((item) => item.status === 'provided')
       if (provided.length !== items.length) return undefined
-      return provided.reduce((sum, item) => sum.plus(item[field]?.amount ?? 0), new Decimal(0)).toFixed(2)
+      if (provided.some((item) => item[field] && !moneyToTwd(data, item[field]!))) return undefined
+      return provided.reduce((sum, item) => sum.plus(item[field] ? moneyToTwd(data, item[field]!)! : 0), new Decimal(0)).toFixed(2)
     }
     const income = total(data.incomes, 'monthlyAmount')
     const expense = total(data.expenses, 'monthlyAmount')
     const debt = total(data.liabilities, 'monthlyPayment')
     const baseMonth = data.calculationBaseDate.slice(0, 7)
-    const primaryRetirement = data.members.find((member) => member.id === data.household.primaryMemberId)?.plannedRetirementMonth
-    const activeContributions = data.contributions.filter((item) => {
-      if (item.status !== 'provided' || item.startDate > data.calculationBaseDate) return false
-      if (item.endRule === 'planEnd') return true
-      if (item.endRule === 'fixedDate') return baseMonth < (item.endDate ?? '')
-      if (item.endRule === 'ownerRetirement') {
-        const retirement = data.members.find((member) => member.id === item.sourceMemberId)?.plannedRetirementMonth
-        return !retirement || baseMonth < retirement
-      }
-      return !primaryRetirement || baseMonth < primaryRetirement
-    })
-    const contributionTwd = data.contributions.length === 0 || data.contributions.some((item) => item.status === 'notProvided') ? undefined : activeContributions.reduce((sum, item) => sum.plus(item.amount.amount), new Decimal(0)).toFixed(2)
+    const activeContributions = data.contributions.filter((item) => contributionActiveInMonth(data, item, baseMonth))
+    const contributionTwd = data.contributions.length === 0 || data.contributions.some((item) => item.status === 'notProvided') || activeContributions.some((item) => !moneyToTwd(data, item.amount)) ? undefined : activeContributions.reduce((sum, item) => sum.plus(moneyToTwd(data, item.amount)!), new Decimal(0)).toFixed(2)
     const unallocatedTwd = income !== undefined && expense !== undefined && debt !== undefined && contributionTwd !== undefined ? new Decimal(income).minus(expense).minus(debt).minus(contributionTwd).toFixed(2) : undefined
     const dashboard = this.dashboard(data, 'household')
     return {
+      missingFxCurrencies: [...new Set(data.assets.filter((asset) => asset.status === 'provided' && !moneyToTwd(data, asset.currentValue)).map((asset) => asset.currentValue.currency))],
       household: { monthlyIncomeTwd: income, monthlyExpenseTwd: expense, monthlyDebtPaymentTwd: debt, monthlyContributionTwd: contributionTwd, unallocatedTwd },
       assets: { totalTwd: dashboard.totalAssetsTwd, liabilitiesTwd: dashboard.totalLiabilitiesTwd, netWorthTwd: dashboard.netWorthTwd },
       accountCount: data.accounts.length,
@@ -227,8 +232,8 @@ export class PlannerService {
       completeness: { hasIncome: data.incomes.some((item) => item.status === 'provided'), hasExpense: data.expenses.some((item) => item.status === 'provided'), hasLiability: data.liabilities.some((item) => item.status === 'provided'), hasContribution: data.contributions.some((item) => item.status === 'provided') },
       accounts: data.accounts.map((account) => {
         const assets = data.assets.filter((asset) => asset.accountId === account.id)
-        const available = account.status === 'provided' && assets.every((asset) => asset.status === 'provided' && asset.currentValue.currency === 'TWD')
-        return { id: account.id, name: account.name, institution: account.institution, accountType: account.accountType, assetCount: assets.length, totalTwd: available ? assets.reduce((sum, asset) => sum.plus(asset.currentValue.amount), new Decimal(0)).toFixed(2) : undefined, status: available ? 'provided' : 'notProvided' }
+        const available = account.status === 'provided' && assets.every((asset) => asset.status === 'provided' && moneyToTwd(data, asset.currentValue) !== null)
+        return { id: account.id, name: account.name, institution: account.institution, accountType: account.accountType, assetCount: assets.length, totalTwd: available ? assets.reduce((sum, asset) => sum.plus(moneyToTwd(data, asset.currentValue)!), new Decimal(0)).toFixed(2) : undefined, status: available ? 'provided' : 'notProvided' }
       }),
     }
   }

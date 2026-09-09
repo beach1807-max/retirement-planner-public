@@ -8,7 +8,12 @@ export const TAIWAN_LABOR_RULES_2026 = {
   laborPensionAnnuityRate: '0.011473',
   employerMinimumRate: '0.06',
   voluntaryMaximumRate: '0.06',
+  laborPensionMinimumAge: 60,
+  minimumAnnuityYears: 15,
+  laborInsuranceEarlyYears: 5,
   sources: [
+    'https://www.bli.gov.tw/0007073.html',
+    'https://www.bli.gov.tw/0019821.html',
     'https://www.bli.gov.tw/0004857.html',
     'https://www.bli.gov.tw/0017389.html',
     'https://www.bli.gov.tw/0018437.html',
@@ -85,3 +90,20 @@ export function estimateRetirementSystem(laborInsurance: LaborInsuranceInput, la
 }
 
 export function claimAgeAtMonth(birthDate: string, month: string): number { return Math.floor((monthIndex(month) - monthIndex(birthDate)) / 12) }
+
+/** 一般老年請領條件的月度估算；不涵蓋失能、特殊職業及併計國保等例外。 */
+export function retirementEligibilityAtMonth(input: {
+  birthDate: string; calculationBaseDate: string; month: string
+  insuredYears: string; insuranceClaimAge: number
+  contributionYears: string; pensionClaimAge: number; pensionContributing: boolean
+}) {
+  const age = claimAgeAtMonth(input.birthDate, input.month)
+  const insuranceMinimumAge = statutoryLaborInsuranceAge(input.birthDate) - TAIWAN_LABOR_RULES_2026.laborInsuranceEarlyYears
+  const elapsed = (claimAge: number) => Math.max(0, Math.min(monthsBetween(input.calculationBaseDate, input.month), monthsBetween(input.calculationBaseDate, addMonths(input.birthDate, claimAge * 12))))
+  const insuranceYears = new Decimal(input.insuredYears).plus(new Decimal(elapsed(input.insuranceClaimAge)).div(12))
+  const pensionYears = new Decimal(input.contributionYears).plus(input.pensionContributing ? new Decimal(elapsed(input.pensionClaimAge)).div(12) : 0)
+  return {
+    insurance: { eligible: age >= insuranceMinimumAge && insuranceYears.gte(TAIWAN_LABOR_RULES_2026.minimumAnnuityYears), minimumAge: insuranceMinimumAge },
+    pension: { eligible: age >= TAIWAN_LABOR_RULES_2026.laborPensionMinimumAge, minimumAge: TAIWAN_LABOR_RULES_2026.laborPensionMinimumAge, monthlyEligible: age >= TAIWAN_LABOR_RULES_2026.laborPensionMinimumAge && pensionYears.gte(TAIWAN_LABOR_RULES_2026.minimumAnnuityYears) },
+  }
+}
