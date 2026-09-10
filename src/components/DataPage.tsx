@@ -9,7 +9,7 @@ import type { DashboardViewModel } from '../application/planner-service'
 import { CalculationHelp } from './CalculationHelp'
 import { MemberManagement } from './MemberManagement'
 import { defaultAllocationClassForAssetType } from '../domain/asset-classification'
-import { inferTwseSymbolFromAssetName, isMarketTrackableAssetType } from '../domain/market-trackable'
+import { inferTwseSymbolFromAssetName, isMarketTrackableAssetType, type SupportedMarket } from '../domain/market-trackable'
 import { upsertAssetMarketLink } from '../application/asset-market-link'
 
 interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
@@ -30,6 +30,7 @@ export function DataPage({ data, onChange, summary }: Props) {
   const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto')
   const [marketTracking, setMarketTracking] = useState(false)
   const [symbol, setSymbol] = useState('')
+  const [market, setMarket] = useState<SupportedMarket>('TWSE')
   const [assetCurrency, setAssetCurrency] = useState('TWD')
   const [endDateMode, setEndDateMode] = useState<'date' | 'month'>('date')
   const [customRates, setCustomRates] = useState({ conservative: '0', balanced: '0', optimistic: '0' })
@@ -48,6 +49,7 @@ export function DataPage({ data, onChange, summary }: Props) {
     setAllocationMode(asset ? 'manual' : 'auto')
     const instrument = asset && data.instruments.find((item) => item.assetId === asset.id)
     setMarketTracking(Boolean(instrument))
+    setMarket(instrument?.market ?? 'TWSE')
     setSymbol(instrument?.symbol ?? inferTwseSymbolFromAssetName(asset?.name ?? '') ?? '')
     setCustomRates({
       conservative: asset?.scenarioRates ? new Decimal(asset.scenarioRates.conservative).mul(100).toString() : '0',
@@ -107,8 +109,9 @@ export function DataPage({ data, onChange, summary }: Props) {
     try {
       next = upsertAssetMarketLink(withAsset, {
         assetId: asset.id,
-        enabled: marketTracking && assetCurrency === 'TWD' && isMarketTrackableAssetType(assetType),
+        enabled: marketTracking && isMarketTrackableAssetType(assetType),
         symbol,
+        market: assetCurrency === 'USD' ? 'US' : market,
         quantity: String(form.get('quantity') ?? ''),
         accountId: String(form.get('accountId') ?? '') || undefined,
       })

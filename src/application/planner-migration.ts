@@ -39,14 +39,30 @@ export function migratePlannerData(value: unknown): PlannerData {
       }) as PlannerData['portfolios'][number]['targets'],
     })),
   })
+  const toV10 = (current: PlannerData): PlannerData => ({
+    ...current,
+    schemaVersion: 'planner-data-v0.10',
+    instruments: current.instruments.map((item) => ({
+      ...item,
+      market: item.market ?? 'TWSE', mic: item.market === 'TPEX' ? 'ROCO' : item.market === 'US' ? 'US' : 'XTAI',
+      providerSymbol: item.providerSymbol ?? item.symbol,
+      instrumentKey: item.instrumentKey ?? `${item.market ?? 'TWSE'}:${item.symbol}`,
+      instrumentType: item.instrumentType ?? 'stock',
+      timezone: item.timezone ?? (item.market === 'US' ? 'America/New_York' : 'Asia/Taipei'),
+    })),
+  })
+  if (data.schemaVersion === 'planner-data-v0.10') {
+    const current = data as unknown as PlannerData
+    return toV10({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] })
+  }
   if (data.schemaVersion === 'planner-data-v0.9') {
     const current = data as unknown as PlannerData
-    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray) && Array.isArray(current.assumptions?.assetReturnPresets)) return current
-    return toV09({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] })
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray) && Array.isArray(current.assumptions?.assetReturnPresets)) return toV10(current)
+    return toV10(toV09({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] }))
   }
   if (data.schemaVersion === 'planner-data-v0.8') {
     const current = data as unknown as PlannerData
-    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return toV09(current)
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return toV10(toV09(current))
     return toV09({
       ...current,
       instruments: Array.isArray(current.instruments) ? current.instruments : [],

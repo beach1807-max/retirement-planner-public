@@ -147,13 +147,15 @@ export interface PlannerScenario extends EntityTimestamps {
   }
 }
 
-export interface PlannerInstrument extends EntityTimestamps { id: string; householdId: string; assetId: string; symbol: string; market: 'TWSE'; currency: string }
+export type MarketCode = 'TWSE' | 'TPEX' | 'US'
+export type MarketInstrumentType = 'stock' | 'etf'
+export interface PlannerInstrument extends EntityTimestamps { id: string; householdId: string; assetId: string; symbol: string; market: MarketCode; mic?: 'XTAI' | 'ROCO' | 'XNAS' | 'XNYS' | 'ARCX' | 'US'; providerSymbol?: string; instrumentKey?: string; currency: 'TWD' | 'USD'; instrumentType?: MarketInstrumentType; timezone?: string }
 export interface PlannerMarketQuote extends EntityTimestamps { id: string; householdId: string; instrumentId: string; symbol: string; price: string; currency: string; asOf: string; sourceId: string; fetchedAt: string }
 export interface PlannerExchangeRate extends EntityTimestamps { id: string; householdId: string; fromCurrency: string; toCurrency: 'TWD'; rate: string; asOf: string; sourceId: string; fetchedAt: string }
 export interface PlannerMarketDataStamp extends EntityTimestamps { id: string; householdId: string; providerId: string; status: 'success' | 'partial' | 'failed'; updatedAssetIds: string[]; errors: string[]; attemptedAt: string; completedAt: string }
 
 export interface PlannerData {
-  schemaVersion: 'planner-data-v0.9'
+  schemaVersion: 'planner-data-v0.9' | 'planner-data-v0.10'
   calculationBaseDate: string
   household: PlannerHousehold
   members: PlannerMember[]
@@ -196,7 +198,7 @@ export function createStarterData(input: StarterDataInput): PlannerData {
   const members: PlannerMember[] = [{ id: primaryId, householdId, name: input.primaryName, role: 'primary', birthDate: input.primaryBirthDate, planningEndAge: input.planningEndAge, plannedRetirementMonth: input.primaryPlannedRetirementMonth, isActive: true, createdAt: timestamp, updatedAt: timestamp }]
   if (input.partnerName && input.partnerBirthDate) members.push({ id: crypto.randomUUID(), householdId, name: input.partnerName, role: 'partner', birthDate: input.partnerBirthDate, planningEndAge: input.planningEndAge, isActive: true, createdAt: timestamp, updatedAt: timestamp })
   return {
-    schemaVersion: 'planner-data-v0.9', calculationBaseDate: input.calculationBaseDate,
+    schemaVersion: 'planner-data-v0.10', calculationBaseDate: input.calculationBaseDate,
     household: { id: householdId, name: input.householdName, baseCurrency: 'TWD', primaryMemberId: primaryId, createdAt: timestamp, updatedAt: timestamp },
     members, assets: [], contributions: [], accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [], instruments: [], marketQuotes: [], exchangeRates: [], marketDataStamps: [],
     retirementPlan: { earliestRetirementMonth: input.calculationBaseDate.slice(0, 7), retirementExpenseMonthlyRealTwd: '50000', safetyReserveRealTwd: '0', legacyTargetRealTwd: '0', defaultReturnProfileId: 'balanced', oneTimeExpenses: [] },

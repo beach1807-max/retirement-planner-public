@@ -41,7 +41,7 @@ describe('JSON 備份', () => {
     const legacyScenario = { ...original.scenarios[0], version: 'scenario-v0.1', overrides: { plannedRetirementMonth: '2035-01', additionalMonthlyContributionTwd: '5000', primaryLaborPensionVoluntaryRate: '0.06' } }
     const legacy = { ...original, schemaVersion: 'planner-data-v0.8', assumptions: { ...original.assumptions, assetReturnPresets: undefined }, scenarios: [legacyScenario] }
     const restored = parseBackup(JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.8', exportedAt: original.updatedAt, data: legacy }))
-    expect(restored.schemaVersion).toBe('planner-data-v0.9')
+    expect(restored.schemaVersion).toBe('planner-data-v0.10')
     expect(restored.assets).toEqual(original.assets)
     expect(restored.scenarios[0].overrides).toMatchObject({ memberRetirement: [{ memberId: original.household.primaryMemberId, plannedRetirementMonth: '2035-01' }], additionalContributions: [{ amountTwd: '5000' }], retirementSystems: [{ laborPensionVoluntaryRate: '0.06' }] })
   })

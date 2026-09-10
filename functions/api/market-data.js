@@ -1,30 +1,24 @@
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'
 const CBC_URL = 'https://cpx.cbc.gov.tw/api/OpenData/FTDOpenData_Day'
-
-const isoTwseDate = (value) => `${Number(value.slice(0, 3)) + 1911}-${value.slice(3, 5)}-${value.slice(5, 7)}`
-const isoCbcDate = (value) => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
-
+const US_URL = 'https://api.twelvedata.com/time_series'
+const isoTaiwanDate = (value) => { const digits = String(value ?? '').replace(/\D/g, ''); return digits.length === 7 ? `${Number(digits.slice(0, 3)) + 1911}-${digits.slice(3, 5)}-${digits.slice(5, 7)}` : new Date().toISOString().slice(0, 10) }
+const isoCbcDate = (value) => `${String(value).slice(0, 4)}-${String(value).slice(4, 6)}-${String(value).slice(6, 8)}`
+const parse = (value) => [...new Set(String(value ?? '').split(',').map((item) => item.trim().toUpperCase()).filter((item) => /^(TWSE|TPEX):\d{4,6}[A-Z]?$|^US:[A-Z][A-Z0-9.\-]{0,14}$/.test(item)))].slice(0, 50).map((item) => { const [market, symbol] = item.split(':'); return { market, symbol } })
+const makeQuote = (market, symbol, price, currency, asOf, sourceId) => ({ market, symbol, price: String(price), currency, asOf, sourceId })
+async function taiwan(market, symbols) {
+  const response = await fetch(market === 'TWSE' ? TWSE_URL : TPEX_URL, { headers: { Accept: 'application/json' } }); if (!response.ok) throw new Error()
+  const rows = await response.json()
+  return rows.flatMap((row) => { const symbol = String(row.Code ?? row.SecuritiesCompanyCode ?? row['證券代號'] ?? '').trim(); const price = Number(String(row.ClosingPrice ?? row.Close ?? row['收盤'] ?? '').replace(/,/g, '')); return symbols.includes(symbol) && Number.isFinite(price) ? [makeQuote(market, symbol, price, 'TWD', isoTaiwanDate(row.Date ?? row.TradeDate ?? row['日期']), market === 'TWSE' ? 'twse-openapi-v1' : 'tpex-openapi-v1')] : [] })
+}
+async function us(symbols, key) {
+  if (!key) throw new Error('NO_KEY')
+  return Promise.all(symbols.map(async (symbol) => { const url = new URL(US_URL); url.searchParams.set('symbol', symbol); url.searchParams.set('interval', '1day'); url.searchParams.set('outputsize', '1'); url.searchParams.set('apikey', key); const response = await fetch(url); const body = response.ok && await response.json(); const row = body?.values?.[0]; const price = Number(row?.close); if (!row || !Number.isFinite(price)) throw new Error(); return makeQuote('US', symbol, price, 'USD', String(row.datetime).slice(0, 10), 'twelve-data-eod') }))
+}
 export async function onRequestGet(context) {
-  const url = new URL(context.request.url)
-  const symbols = [...new Set((url.searchParams.get('symbols') ?? '').split(',').map((item) => item.trim()).filter((item) => /^\d{4,6}[A-Z]?$/.test(item)))].slice(0, 50)
-  const fetchedAt = new Date().toISOString()
-  const errors = []
-  let quotes = []
-  let rates = []
-  try {
-    const response = await fetch(TWSE_URL, { headers: { Accept: 'application/json' } })
-    if (!response.ok) throw new Error(`TWSE ${response.status}`)
-    const rows = await response.json()
-    quotes = rows.filter((row) => symbols.includes(row.Code) && Number.isFinite(Number(row.ClosingPrice))).map((row) => ({ symbol: row.Code, price: String(Number(row.ClosingPrice)), currency: 'TWD', asOf: isoTwseDate(row.Date), sourceId: 'twse-openapi-v1' }))
-  } catch { errors.push({ message: '臺灣證券交易所行情暫時無法取得。' }) }
-  try {
-    const response = await fetch(CBC_URL, { headers: { Accept: 'application/json' } })
-    if (!response.ok) throw new Error(`CBC ${response.status}`)
-    const rows = await response.json()
-    const row = rows[rows.length - 1]
-    const rate = Number(row.NTD_USD)
-    if (!Number.isFinite(rate)) throw new Error('CBC invalid rate')
-    rates = [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: String(rate), asOf: isoCbcDate(row['日期']), sourceId: 'cbc-ftd-day' }]
-  } catch { errors.push({ message: '中央銀行匯率暫時無法取得。' }) }
-  return Response.json({ quotes, rates, errors, fetchedAt }, { headers: { 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } })
+  const instruments = parse(new URL(context.request.url).searchParams.get('instruments')); const fetchedAt = new Date().toISOString(); const errors = []; const quotes = []; let rates = []
+  for (const market of ['TWSE', 'TPEX']) { const symbols = instruments.filter((item) => item.market === market).map((item) => item.symbol); if (symbols.length) try { quotes.push(...await taiwan(market, symbols)) } catch { errors.push({ market, message: `${market === 'TWSE' ? '臺灣證券交易所' : '證券櫃檯買賣中心'}收盤價暫時無法取得。` }) } }
+  const usSymbols = instruments.filter((item) => item.market === 'US').map((item) => item.symbol); if (usSymbols.length) try { quotes.push(...await us(usSymbols, context.env.TWELVE_DATA_API_KEY)) } catch (error) { errors.push({ market: 'US', message: error.message === 'NO_KEY' ? '美股收盤價尚未啟用，已保留手動市值。' : '美股收盤價暫時無法取得。' }) }
+  try { const response = await fetch(CBC_URL, { headers: { Accept: 'application/json' } }); const rows = response.ok && await response.json(); const row = rows?.at(-1); const rate = Number(row?.NTD_USD); if (!Number.isFinite(rate)) throw new Error(); rates = [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: String(rate), asOf: isoCbcDate(row['日期']), sourceId: 'cbc-ftd-day' }] } catch { errors.push({ message: '中央銀行 USD/TWD 匯率暫時無法取得。' }) }
+  return Response.json({ quotes, rates, errors, fetchedAt }, { headers: { 'Cache-Control': 'public, max-age=900', 'X-Content-Type-Options': 'nosniff' } })
 }

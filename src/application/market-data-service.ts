@@ -10,7 +10,7 @@ export class MarketDataService {
   async refresh(data: PlannerData): Promise<{ data: PlannerData; report: MarketUpdateReport }> {
     const attemptedAt = new Date().toISOString()
     try {
-      const batch = await this.provider.fetchLatest(data.instruments.map((item) => ({ id: item.id, symbol: item.symbol, market: item.market, currency: item.currency })))
+      const batch = await this.provider.fetchLatest(data.instruments.map((item) => ({ id: item.id, symbol: item.symbol, market: item.market, currency: item.currency, providerSymbol: item.providerSymbol, instrumentKey: item.instrumentKey })))
       const next = structuredClone(data)
       const updatedAssetIds: string[] = []
       for (const quote of batch.quotes) {

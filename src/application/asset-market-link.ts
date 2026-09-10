@@ -1,4 +1,5 @@
 import type { PlannerAccount, PlannerData } from './planner-data'
+import { marketDefaults, normalizeMarketSymbol, type SupportedMarket } from '../domain/market-trackable'
 
 export interface AssetMarketLinkInput {
   assetId: string
@@ -6,6 +7,7 @@ export interface AssetMarketLinkInput {
   symbol?: string
   quantity?: string
   accountId?: string
+  market?: SupportedMarket
 }
 
 export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkInput): PlannerData {
@@ -21,7 +23,8 @@ export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkI
 
   const symbol = input.symbol?.trim().toUpperCase() ?? ''
   const quantity = input.quantity?.trim() ?? ''
-  if (!/^\d{4,6}[A-Z]?$/.test(symbol)) throw new Error('INVALID_MARKET_SYMBOL')
+  const market = input.market ?? 'TWSE'
+  if (!normalizeMarketSymbol(market, symbol)) throw new Error('INVALID_MARKET_SYMBOL')
   if (!quantity) throw new Error('MISSING_HOLDING_QUANTITY')
 
   let account = input.accountId ? next.accounts.find((item) => item.id === input.accountId) : undefined
@@ -39,12 +42,12 @@ export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkI
   const existingInstrument = next.instruments.find((item) => item.assetId === input.assetId)
   const instrument = {
     id: existingInstrument?.id ?? crypto.randomUUID(), householdId: next.household.id, assetId: input.assetId,
-    symbol, market: 'TWSE' as const, currency: 'TWD', createdAt: existingInstrument?.createdAt ?? now, updatedAt: now,
+    symbol, market, ...marketDefaults(market), providerSymbol: symbol, instrumentKey: `${market}:${symbol}`, instrumentType: 'stock' as const, createdAt: existingInstrument?.createdAt ?? now, updatedAt: now,
   }
   next.instruments = existingInstrument
     ? next.instruments.map((item) => item.id === existingInstrument.id ? instrument : item)
     : [...next.instruments, instrument]
-  if (existingInstrument?.symbol !== symbol) next.marketQuotes = next.marketQuotes.filter((item) => item.instrumentId !== instrument.id)
+  if (existingInstrument?.instrumentKey !== instrument.instrumentKey) next.marketQuotes = next.marketQuotes.filter((item) => item.instrumentId !== instrument.id)
 
   const existingHolding = next.holdings.find((item) => item.assetId === input.assetId && item.accountId === account.id)
     ?? next.holdings.find((item) => item.assetId === input.assetId)
