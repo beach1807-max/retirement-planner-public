@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 async function navigateTo(page: Page, label: string, isMobile: boolean) {
-  if (isMobile && ['投資組合', '行情更新', '預測設定', '資料與備份'].includes(label)) {
+  if (isMobile && ['退休制度', '行情更新', '預測設定', '資料與備份'].includes(label)) {
     await page.getByRole('button', { name: '更多功能' }).click()
     await page.getByRole('dialog').getByRole('button', { name: label }).click()
   } else {
@@ -225,9 +225,9 @@ test('可保存一次性支出並重新產生預測', async ({ page, isMobile })
   await expect(page.getByText('未來可能累積多少？')).toBeVisible({ timeout: 15_000 })
 })
 
-test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ page }) => {
+test('可依版本化規則估算勞保勞退並顯示於 Dashboard', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  await page.getByRole('button', { name: '退休制度' }).click()
+  await navigateTo(page, '退休制度', isMobile)
   await expect(page.getByRole('link', { name: /投保資料與勞退查詢方式/ })).toBeVisible()
   const primaryPanel = page.locator('section.panel').filter({ hasText: '主要規劃人 A' })
   await expect(primaryPanel.getByText('勞保月領估算')).toBeVisible()
@@ -335,7 +335,7 @@ test('視覺稽核截圖', async ({ page, isMobile }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('settings.png'), fullPage: true })
 })
 
-test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保留', async ({ page }, testInfo) => {
+test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保留', async ({ page, isMobile }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByLabel('查看時間').selectOption('25')
   await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
@@ -360,8 +360,10 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   await expect(page.locator('.projection-table tbody td').last()).not.toContainText('名目資產 $0')
   await page.locator('.projection-table').scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('custom-projection.png'), fullPage: true })
-  await page.getByRole('button', { name: '退休制度', exact: true }).click()
+  await navigateTo(page, '退休制度', isMobile)
   const primary = page.locator('section.panel').filter({ hasText: '主要規劃人 A' })
+  await primary.getByText(/勞保老年年金設定/).click()
+  await primary.getByText(/勞退新制退休金設定/).click()
   await primary.getByLabel('勞退請領模式').selectOption('lumpSum')
   await primary.getByRole('button', { name: '儲存並估算' }).click()
   await expect(primary.getByText(/選擇一次領/)).toBeVisible()
@@ -373,20 +375,53 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   await page.screenshot({ path: testInfo.outputPath('pension-monthly.png'), fullPage: true })
 })
 
+test('行動版導覽、觸控尺寸與漸進式資產表單符合 Mobile First 規格', async ({ page, isMobile }) => {
+  test.skip(!isMobile, '此驗證只套用行動與平板專案')
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  const bottomNav = page.getByRole('navigation', { name: '行動版主要功能' })
+  await expect(bottomNav.getByRole('button')).toHaveCount(5)
+  for (const label of ['投資與退休預測', '家庭資料', '投資組合', '情境模擬', '更多功能']) {
+    const box = await bottomNav.getByRole('button', { name: label }).boundingBox()
+    expect(box?.height).toBeGreaterThanOrEqual(44)
+  }
+  await bottomNav.getByRole('button', { name: '更多功能' }).click()
+  const menu = page.getByRole('dialog', { name: '更多功能' })
+  await expect(menu.getByRole('button', { name: '退休制度' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: '行情更新' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: '預測設定' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: '資料與備份' })).toBeVisible()
+  await menu.getByRole('button', { name: '關閉更多功能' }).click()
+
+  await bottomNav.getByRole('button', { name: '家庭資料' }).click()
+  await expect(page.locator('#main-content')).toBeFocused()
+  await page.getByRole('button', { name: '新增資產' }).click()
+  const predictionSettings = page.locator('.asset-prediction-settings')
+  await expect(predictionSettings).not.toHaveAttribute('open', '')
+  await page.locator('select[name="assetType"]').selectOption('etf')
+  await expect(predictionSettings).toHaveAttribute('open', '')
+  await expect(page.getByText('使用市場行情更新目前價值')).toBeVisible()
+  expect(await page.getByLabel('資產名稱').evaluate((input) => Number.parseFloat(getComputedStyle(input).fontSize))).toBeGreaterThanOrEqual(16)
+  const portraitOverflow = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter((element) => element.getBoundingClientRect().right > document.documentElement.clientWidth + 1).map((element) => ({ tag: element.tagName, className: element.className, right: Math.round(element.getBoundingClientRect().right) })).slice(0, 10))
+  expect(portraitOverflow).toEqual([])
+})
+
 test('小螢幕、橫向與放大文字沒有水平溢位', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await expect(page.locator('.projection-table tbody tr').last()).toBeVisible({ timeout: 15_000 })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  const portraitOverflow = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter((element) => element.getBoundingClientRect().right > document.documentElement.clientWidth + 1).map((element) => ({ tag: element.tagName, className: element.className, right: Math.round(element.getBoundingClientRect().right) })).slice(0, 10))
+  expect(portraitOverflow).toEqual([])
 
   await page.setViewportSize({ width: 844, height: 390 })
   await page.evaluate(() => { document.documentElement.style.fontSize = '20px' })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  const landscapeOverflow = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter((element) => element.getBoundingClientRect().right > document.documentElement.clientWidth + 1).map((element) => ({ tag: element.tagName, className: element.className, right: Math.round(element.getBoundingClientRect().right) })).slice(0, 10))
+  expect(landscapeOverflow).toEqual([])
   await expect(page.getByRole('button', { name: '家庭資料', exact: true })).toBeVisible()
 })
 
-test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context }) => {
+test('PWA Service Worker 可離線重新開啟既有規劃', async ({ page, context, browserName }) => {
+  test.skip(browserName === 'webkit', 'Playwright WebKit 不提供 Service Worker 離線測試環境')
   await page.getByRole('button', { name: '快速試算我的未來資產' }).click()
   await page.getByLabel('出生日期').fill('1990-01-01')
   await page.getByRole('button', { name: '下一步' }).click()

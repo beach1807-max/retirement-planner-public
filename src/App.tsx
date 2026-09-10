@@ -29,10 +29,10 @@ const BackupPage = lazy(() => import('./components/BackupPage').then((module) =>
 
 const navigation: Array<{ id: Page; label: string; icon: typeof House }> = [
   { id: 'dashboard', label: '投資與退休預測', icon: ChartNoAxesCombined },
-  { id: 'scenarios', label: '情境模擬', icon: FlaskConical },
   { id: 'data', label: '家庭資料', icon: Database },
-  { id: 'retirementSystems', label: '退休制度', icon: Scale },
   { id: 'portfolio', label: '投資組合', icon: PieChart },
+  { id: 'scenarios', label: '情境模擬', icon: FlaskConical },
+  { id: 'retirementSystems', label: '退休制度', icon: Scale },
   { id: 'market', label: '行情更新', icon: RefreshCw },
   { id: 'settings', label: '預測設定', icon: Settings },
   { id: 'backup', label: '資料與備份', icon: ArchiveRestore },
@@ -81,6 +81,12 @@ export function App() {
     await saveData(next)
   }
 
+  function navigate(nextPage: Page) {
+    setPage(nextPage)
+    window.scrollTo(0, 0)
+    window.requestAnimationFrame(() => document.getElementById('main-content')?.focus())
+  }
+
   const primary = useMemo(
     () => activeData?.members.find((member) => member.id === activeData.household.primaryMemberId),
     [activeData],
@@ -125,7 +131,7 @@ export function App() {
           {navigation.map((item) => {
             const Icon = item.icon
             return (
-              <button key={item.id} className={page === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.id)}>
+              <button key={item.id} className={page === item.id ? 'nav-item active' : 'nav-item'} aria-current={page === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
                 <Icon size={19} aria-hidden="true" />
                 <span>{item.label}</span>
               </button>
@@ -151,7 +157,7 @@ export function App() {
         </header>
 
         {persistenceError && <div className="alert error" role="alert">{persistenceError}</div>}
-        {demoData && <div className="alert info demo-banner" role="status"><span>目前正在使用展示資料，這些不是你的正式資料。</span><span><button className="button small" type="button" onClick={() => { setDemoData(null); setPage('dashboard') }}>離開展示模式</button>{!data && <button className="button small" type="button" onClick={() => setDemoData(null)}>建立我的規劃</button>}</span></div>}
+        {demoData && <div className="alert info demo-banner" role="status"><span>目前正在使用展示資料，這些不是你的正式資料。</span><span><button className="button small" type="button" onClick={() => { setDemoData(null); navigate('dashboard') }}>離開展示模式</button>{!data && <button className="button small" type="button" onClick={() => setDemoData(null)}>建立我的規劃</button>}</span></div>}
         {(offlineReady || needRefresh) && (
           <div className="update-toast" role="status">
             <span>{needRefresh ? '有新版可以使用。' : '已可離線使用。'}</span>
@@ -160,7 +166,7 @@ export function App() {
         )}
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
-          {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} financialOverview={plannerService.financialOverview(activeData)} onContinueFullPlan={() => setPage('data')} onOpenData={() => setPage('data')} />}
+          {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} financialOverview={plannerService.financialOverview(activeData)} onContinueFullPlan={() => navigate('data')} onOpenData={() => navigate('data')} />}
           {page === 'data' && <DataPage data={activeData} summary={plannerService.dashboard(activeData, 'household')} onChange={saveActiveData} />}
           {page === 'settings' && <SettingsPage data={activeData} onChange={saveActiveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={activeData} estimates={plannerService.retirementSystems(activeData)} onChange={saveActiveData} />}
@@ -174,14 +180,14 @@ export function App() {
               feedbackUrl={import.meta.env.VITE_FEEDBACK_URL}
               onClear={async () => {
                 if (demoData) { setDemoData(null) } else { await plannerService.clear(); setData(null) }
-                setPage('dashboard')
+                navigate('dashboard')
               }}
             />
           )}
         </Suspense>
       </main>
 
-      <MobileNavigation items={navigation} page={page} onNavigate={setPage} />
+      <MobileNavigation items={navigation} page={page} onNavigate={navigate} />
     </div>
   )
 }
