@@ -14,25 +14,39 @@ interface ApiResponse {
 }
 
 export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
-  readonly id = 'twse-tpex-stashgamma-eod-v0.10'
+  readonly id = 'twse-finmind-stashgamma-eod-v0.11'
   constructor(private readonly endpoint = '/api/market-data') {}
 
   async fetchLatest(instruments: MarketInstrumentRequest[]): Promise<MarketDataBatch> {
     const supported = instruments.slice(0, 50)
-    const taiwan = supported.filter((item) => item.market !== 'US')
-    const response = await fetch(`${this.endpoint}?instruments=${encodeURIComponent(taiwan.map((item) => `${item.market}:${item.providerSymbol ?? item.symbol}`).join(','))}`)
+    const twseInstruments = supported.filter((item) => item.market === 'TWSE')
+    const response = await fetch(`${this.endpoint}?instruments=${encodeURIComponent(twseInstruments.map((item) => `TWSE:${item.providerSymbol ?? item.symbol}`).join(','))}`)
     if (!response.ok) throw new Error(`MARKET_PROVIDER_HTTP_${response.status}`)
     const payload = await response.json() as ApiResponse
     const quotes = payload.quotes.flatMap((quote) => {
-      return taiwan.filter((item) => item.symbol === quote.symbol && item.market === ((quote as { market?: string }).market ?? 'TWSE')).map((instrument) => ({ ...quote, instrumentId: instrument.id }))
+      return twseInstruments.filter((item) => item.symbol === quote.symbol).map((instrument) => ({ ...quote, instrumentId: instrument.id }))
     })
+    const today = new Date().toISOString().slice(0, 10)
+    const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
+    const tpexInstruments = supported.filter((item) => item.market === 'TPEX')
+    const tpexErrors: Array<{ instrumentId?: string; message: string }> = []
+    await Promise.all(tpexInstruments.map(async (instrument) => {
+      try {
+        const url = new URL('https://api.finmindtrade.com/api/v4/data')
+        url.searchParams.set('dataset', 'TaiwanStockPrice'); url.searchParams.set('data_id', instrument.providerSymbol ?? instrument.symbol); url.searchParams.set('start_date', from); url.searchParams.set('end_date', today)
+        const tpexResponse = await fetch(url)
+        if (!tpexResponse.ok) throw new Error(`TPEX_EOD_HTTP_${tpexResponse.status}`)
+        const body = await tpexResponse.json() as { data?: Array<{ date: string; close: number }> }
+        const bar = body.data?.at(-1)
+        if (!bar || !Number.isFinite(Number(bar.close))) throw new Error('TPEX_EOD_EMPTY')
+        quotes.push({ instrumentId: instrument.id, symbol: instrument.symbol, price: String(bar.close), currency: 'TWD', asOf: bar.date, sourceId: 'finmind-taiwan-stock-price' })
+      } catch { tpexErrors.push({ instrumentId: instrument.id, message: `${instrument.symbol} 上櫃收盤價暫時無法取得。` }) }
+    }))
     const apiKey = getUsMarketApiKey()
     const usInstruments = supported.filter((item) => item.market === 'US')
     const usErrors: Array<{ instrumentId?: string; message: string }> = []
     if (!apiKey && usInstruments.length) usErrors.push({ message: '尚未在預測設定儲存免費美股 API key，已保留手動市值。' })
     if (apiKey) {
-      const today = new Date().toISOString().slice(0, 10)
-      const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
       await Promise.all(usInstruments.map(async (instrument) => {
         try {
           const url = new URL(`https://www.stashgamma.com/api/dataapi/v1/eod/${encodeURIComponent(instrument.providerSymbol ?? instrument.symbol)}`)
@@ -47,7 +61,7 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
       }))
     }
     const missing = supported.filter((item) => !quotes.some((quote) => quote.instrumentId === item.id) && !usErrors.some((error) => error.instrumentId === item.id)).map((item) => ({ instrumentId: item.id, message: `${item.symbol} 查無最新有效收盤價。` }))
-    const apiErrors = (payload.errors ?? []).map((error) => ({ instrumentId: taiwan.find((item) => item.symbol === error.symbol)?.id, message: error.message }))
-    return { quotes, rates: payload.rates, errors: [...apiErrors, ...usErrors, ...missing], fetchedAt: payload.fetchedAt }
+    const apiErrors = (payload.errors ?? []).map((error) => ({ instrumentId: twseInstruments.find((item) => item.symbol === error.symbol)?.id, message: error.message }))
+    return { quotes, rates: payload.rates, errors: [...apiErrors, ...tpexErrors, ...usErrors, ...missing], fetchedAt: payload.fetchedAt }
   }
 }
