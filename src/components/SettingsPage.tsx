@@ -5,6 +5,7 @@ import type { PlannerData } from '../application/planner-data'
 import { CalculationHelp } from './CalculationHelp'
 import { DEFAULT_ASSET_RETURN_PRESETS } from '../domain/default-return-presets'
 import type { AssetReturnPresetKey, AssetScenarioRates } from '../domain/models'
+import { getUsMarketApiKey, setUsMarketApiKey } from '../infrastructure/us-market-api-key'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 
@@ -14,6 +15,8 @@ export function SettingsPage({ data, onChange }: Props) {
   const [saved, setSaved] = useState(false)
   const [openPreset, setOpenPreset] = useState<AssetReturnPresetKey | null>(null)
   const [presetError, setPresetError] = useState<string | null>(null)
+  const [usApiKey, setUsApiKey] = useState(() => getUsMarketApiKey())
+  const [usApiKeySaved, setUsApiKeySaved] = useState(false)
   const [presetDrafts, setPresetDrafts] = useState<Record<AssetReturnPresetKey, AssetScenarioRates>>(() => Object.fromEntries(data.assumptions.assetReturnPresets.map((preset) => [preset.key, { ...preset.scenarioRates }])) as Record<AssetReturnPresetKey, AssetScenarioRates>)
   const primary = data.members.find((member) => member.id === data.household.primaryMemberId)!
 
@@ -79,6 +82,13 @@ export function SettingsPage({ data, onChange }: Props) {
           <fieldset><legend>一次性支出（今天購買力）</legend><p className="muted">可保存多筆；每次儲存後會保留一列空白供新增。</p>{[...data.retirementPlan.oneTimeExpenses, { id: '', name: '', month: '', amountTwdReal: '' }].map((expense, index) => <div className="form-grid three" key={expense.id || `new-${index}`}><input type="hidden" name="oneTimeExpenseId" value={expense.id} /><label>項目<input name="oneTimeExpenseName" defaultValue={expense.name} /></label><label>月份<input name="oneTimeExpenseMonth" type="month" defaultValue={expense.month} /></label><label>金額<input name="oneTimeExpenseAmount" type="number" min="0" defaultValue={expense.amountTwdReal} /></label></div>)}</fieldset>
           </details>
           <div className="form-actions mobile-sticky-actions"><span className="save-status" role="status">{saved ? '設定已儲存並重新計算。' : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存設定</button></div>
+        </form>
+      </section>
+      <section className="panel">
+        <div className="panel-heading"><div><h2>免費美股收盤價</h2><p>使用自己的 StashGamma 免費 API key。金鑰只保存在這台裝置的瀏覽器，不會寫入退休資料、JSON 備份或 Cloudflare。</p></div></div>
+        <form className="settings-form" onSubmit={(event) => { event.preventDefault(); setUsMarketApiKey(usApiKey); setUsApiKeySaved(true); window.setTimeout(() => setUsApiKeySaved(false), 2000) }}>
+          <label>StashGamma API key<input aria-label="StashGamma API key" type="password" autoComplete="off" value={usApiKey} onChange={(event) => setUsApiKey(event.target.value)} placeholder="sg_live_…" /><small><a href="https://www.stashgamma.com/free-stock-data-api" target="_blank" rel="noreferrer">免費申請，不需信用卡</a>。清空後儲存即可移除此裝置的金鑰。</small></label>
+          <div className="form-actions"><span className="save-status" role="status">{usApiKeySaved ? (usApiKey.trim() ? '美股 API key 已儲存在此瀏覽器。' : '美股 API key 已移除。') : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存美股 API key</button></div>
         </form>
       </section>
       <div className="alert info">目前尚未納入稅務、交易成本與隨機市場波動；勞保／勞退請至「退休制度」依版本化規則估算。</div>

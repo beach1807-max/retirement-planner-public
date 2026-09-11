@@ -8,7 +8,7 @@ import { createDemoData } from '../application/planner-data'
 import { PlannerService, validatePlannerData } from '../application/planner-service'
 
 describe('新手資料流程', () => {
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); localStorage.clear() })
   it('儲存資產時保留收合欄位與未設定報酬', async () => {
     const data = createDemoData('2026-09-01')
     const asset = data.assets[0]
@@ -81,6 +81,16 @@ describe('新手資料流程', () => {
     await user.click(screen.getByRole('button', { name: '恢復系統預設' }))
     expect(screen.getByLabelText('穩健（%）')).toHaveValue(6)
     expect(screen.getAllByText('系統預設').length).toBeGreaterThan(0)
+  })
+
+  it('美股免費 API key 只儲存在此瀏覽器', async () => {
+    const data = createDemoData('2026-09-01')
+    const user = userEvent.setup()
+    render(<SettingsPage data={data} onChange={vi.fn()} />)
+    await user.type(screen.getByLabelText('StashGamma API key'), 'sg_live_browser_only')
+    await user.click(screen.getByRole('button', { name: '儲存美股 API key' }))
+    expect(localStorage.getItem('retirement-planner-us-eod-api-key-v1')).toBe('sg_live_browser_only')
+    expect(screen.getByText('美股 API key 已儲存在此瀏覽器。')).toBeInTheDocument()
   })
 
   it('儲存一般設定仍保留收合的舊版資料與相同預測結果', async () => {
