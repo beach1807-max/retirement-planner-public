@@ -1,5 +1,5 @@
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
-const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'
+const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 const CBC_URL = 'https://cpx.cbc.gov.tw/api/OpenData/FTDOpenData_Day'
 const isoTaiwanDate = (value) => { const digits = String(value ?? '').replace(/\D/g, ''); return digits.length === 7 ? `${Number(digits.slice(0, 3)) + 1911}-${digits.slice(3, 5)}-${digits.slice(5, 7)}` : new Date().toISOString().slice(0, 10) }
 const isoCbcDate = (value) => `${String(value).slice(0, 4)}-${String(value).slice(4, 6)}-${String(value).slice(6, 8)}`
