@@ -1,18 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import { createDemoData } from './planner-data'
 import { upsertAssetMarketLink } from './asset-market-link'
+import { validatePlannerData } from './planner-service'
 
 describe('資產行情關聯', () => {
   it('一次建立標的、持有部位及 fallback 帳戶，停用時清理行情關聯', () => {
     const data = createDemoData('2026-09-01')
     const assetId = data.assets[0].id
     const linked = upsertAssetMarketLink(data, { assetId, enabled: true, symbol: '0050', quantity: '3000' })
-    expect(linked.instruments).toMatchObject([{ assetId, symbol: '0050' }])
+    expect(linked.instruments).toMatchObject([{ assetId, symbol: '0050', market: 'TWSE', currency: 'TWD' }])
     expect(linked.holdings).toMatchObject([{ assetId, quantity: '3000', accountId: 'market-tracked-account' }])
     expect(linked.assets[0].accountId).toBe('market-tracked-account')
     const disabled = upsertAssetMarketLink(linked, { assetId, enabled: false })
     expect(disabled.instruments).toHaveLength(0)
     expect(disabled.holdings).toHaveLength(0)
+  })
+
+  it.each(['VT', 'VOO', 'AAPL'])('建立 %s 的 US / USD Instrument 並連結原資產', (symbol) => {
+    const data = createDemoData('2026-09-01')
+    const assetId = data.assets[0].id
+    data.assets[0].region = symbol === 'VT' ? 'global' : 'us'
+    const linked = upsertAssetMarketLink(data, { assetId, enabled: true, symbol, market: 'US', quantity: '10' })
+    linked.assets[0].currentValue.currency = 'USD'
+    expect(linked.instruments).toMatchObject([{ assetId, symbol, providerSymbol: symbol, market: 'US', currency: 'USD', instrumentKey: `US:${symbol}` }])
+    expect(linked.assets[0].region).toBe(symbol === 'VT' ? 'global' : 'us')
+    expect(() => validatePlannerData(linked)).not.toThrow()
+  })
+
+  it.each(['BRK.B', 'BRK-B'])('預留美股特殊代號 %s', (symbol) => {
+    const data = createDemoData('2026-09-01')
+    expect(() => upsertAssetMarketLink(data, { assetId: data.assets[0].id, enabled: true, symbol, market: 'US', quantity: '1' })).not.toThrow()
   })
 
   it('修改代碼時清除舊行情', () => {

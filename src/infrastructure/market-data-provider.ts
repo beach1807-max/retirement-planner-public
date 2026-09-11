@@ -45,7 +45,7 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
     const apiKey = getUsMarketApiKey()
     const usInstruments = supported.filter((item) => item.market === 'US')
     const usErrors: Array<{ instrumentId?: string; message: string }> = []
-    if (!apiKey && usInstruments.length) usErrors.push({ message: '尚未在預測設定儲存免費美股 API key，已保留手動市值。' })
+    if (!apiKey) usErrors.push(...usInstruments.map((instrument) => ({ instrumentId: instrument.id, message: `${instrument.symbol} 尚未在預測設定儲存免費美股 API key，已保留上次有效行情或手動市值。` })))
     if (apiKey) {
       await Promise.all(usInstruments.map(async (instrument) => {
         try {

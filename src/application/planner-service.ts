@@ -10,6 +10,7 @@ import type { Asset, CalculationInput, CalculationResult, Contribution, Househol
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
 import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
+import { marketDefaults, normalizeMarketSymbol } from '../domain/market-trackable'
 
 export type DashboardScope = 'household' | 'primary' | 'partner'
 export interface ProjectionOptions {
@@ -99,7 +100,9 @@ export function validatePlannerData(data: PlannerData): void {
     if (scenario.overrides.rebalance) calculateRebalancing({ allocations: [], targets: scenario.overrides.rebalance.targetWeights, driftThreshold: '0' })
   }
   for (const instrument of data.instruments) {
-    if (!data.assets.some((asset) => asset.id === instrument.assetId) || !/^\d{4,6}[A-Z]?$/.test(instrument.symbol)) throw new Error('INVALID_MARKET_INSTRUMENT')
+    const asset = data.assets.find((item) => item.id === instrument.assetId)
+    const normalizedSymbol = normalizeMarketSymbol(instrument.market, instrument.symbol)
+    if (!asset || !normalizedSymbol || normalizedSymbol !== instrument.symbol || instrument.currency !== marketDefaults(instrument.market).currency || asset.currentValue.currency !== instrument.currency) throw new Error('INVALID_MARKET_INSTRUMENT')
     if (data.instruments.some((item) => item.id !== instrument.id && item.assetId === instrument.assetId)) throw new Error('DUPLICATE_ASSET_INSTRUMENT')
   }
   for (const quote of data.marketQuotes) if (!data.instruments.some((item) => item.id === quote.instrumentId) || new Decimal(quote.price).lt(0)) throw new Error('INVALID_MARKET_QUOTE')

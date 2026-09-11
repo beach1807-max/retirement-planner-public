@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDemoData } from './planner-data'
 import { MarketDataService } from './market-data-service'
+import { moneyToTwd } from './money'
 
 describe('Market Data Service', () => {
   it('同批行情更新資產，缺資料的標的不破壞原市值', async () => {
@@ -22,6 +23,19 @@ describe('Market Data Service', () => {
     const result = await service.refresh(data)
     expect(result.report.status).toBe('failed')
     expect(result.data.assets).toEqual(data.assets)
+  })
+
+  it('美股以持有數量乘美元收盤價，再以 USD/TWD 換算台幣市值', async () => {
+    const data = createDemoData('2026-09-01')
+    const asset = data.assets[0]
+    asset.currentValue = { amount: '900', currency: 'USD' }
+    data.accounts = [{ id: 'market', householdId: data.household.id, name: '美股帳戶', accountType: 'brokerage', ownershipType: 'household', status: 'provided', createdAt: data.updatedAt, updatedAt: data.updatedAt }]
+    data.holdings = [{ id: 'holding', householdId: data.household.id, accountId: 'market', assetId: asset.id, quantity: '10', status: 'provided', createdAt: data.updatedAt, updatedAt: data.updatedAt }]
+    data.instruments = [{ id: 'vt', householdId: data.household.id, assetId: asset.id, symbol: 'VT', market: 'US', currency: 'USD', createdAt: data.updatedAt, updatedAt: data.updatedAt }]
+    const service = new MarketDataService({ id: 'fixture', fetchLatest: async () => ({ quotes: [{ instrumentId: 'vt', symbol: 'VT', price: '125', currency: 'USD', asOf: '2026-09-10', sourceId: 'stashgamma-eod' }], rates: [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: '32', asOf: '2026-09-10', sourceId: 'cbc' }], errors: [], fetchedAt: '2026-09-11T00:00:00Z' }) })
+    const result = await service.refresh(data)
+    expect(result.data.assets[0].currentValue).toEqual({ amount: '1250.00', currency: 'USD' })
+    expect(moneyToTwd(result.data, result.data.assets[0].currentValue)?.toFixed(2)).toBe('40000.00')
   })
 
   it('同一資產會加總所有有效 Holding 後計算市值', async () => {

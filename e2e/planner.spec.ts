@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
       const request = indexedDB.deleteDatabase('retirement-planner-public')
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
-      request.onblocked = () => resolve()
+      request.onblocked = () => undefined
     })
   })
   await page.reload()
@@ -308,13 +308,44 @@ test('可手動更新官方行情與匯率並同步重算資產', async ({ page,
   await page.getByLabel('持有數量').fill('1000')
   await page.getByRole('button', { name: '儲存資產', exact: true }).click()
   await navigateTo(page, '行情更新', isMobile)
-  await expect(page.getByText(/退休投資帳戶 · 0050/)).toBeVisible()
+  await expect(page.getByText(/退休投資帳戶 · TWSE · 0050/)).toBeVisible()
   await page.getByRole('button', { name: '更新所有行情' }).click()
   await expect(page.getByText('行情與匯率更新完成。')).toBeVisible()
   await expect(page.getByText('70 TWD')).toBeVisible()
   await expect(page.getByText('31.6660')).toBeVisible()
   await page.getByRole('button', { name: '投資與退休預測' }).click()
   await expect(page.getByText(/^行情 \d/)).toBeVisible()
+})
+
+test('全球區域的 VT 可建立美股標的並以美元收盤價及匯率更新市值', async ({ page, isMobile }) => {
+  await page.route('**/api/market-data?*', async (route) => route.fulfill({ json: {
+    quotes: [], rates: [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: '32', asOf: '2026-09-10', sourceId: 'cbc-ftd-day' }], errors: [], fetchedAt: '2026-09-11T00:00:00Z',
+  } }))
+  await page.route('https://www.stashgamma.com/api/dataapi/v1/eod/VT?*', async (route) => route.fulfill({ json: {
+    bars: [{ date: '2026-09-10', close: 125 }],
+  } }))
+  await page.evaluate(() => localStorage.setItem('retirement-planner-us-eod-api-key-v1', 'sg_test_e2e'))
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  await page.getByRole('button', { name: '編輯 退休投資帳戶' }).click()
+  await page.getByLabel('資產幣別').selectOption('USD')
+  await expect(page.getByLabel('掛牌市場')).toHaveValue('US')
+  await page.getByLabel('以美股日收盤價更新目前價值').check()
+  await page.getByLabel('美股代號').fill('VT')
+  await page.getByLabel('持有數量').fill('10')
+  await page.getByLabel('匯率（1 USD 換多少 TWD）').fill('32')
+  await page.getByText('進階資產設定（選填）').click()
+  await page.getByLabel('地區').selectOption('global')
+  await page.getByRole('button', { name: '儲存資產', exact: true }).click()
+  await navigateTo(page, '行情更新', isMobile)
+  await expect(page.getByText(/退休投資帳戶 · US · VT/)).toBeVisible()
+  await page.getByRole('button', { name: '更新所有行情' }).click()
+  await expect(page.getByText('行情與匯率更新完成。')).toBeVisible()
+  await expect(page.getByText('125 USD')).toBeVisible()
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  const asset = page.locator('.data-list article').filter({ hasText: '退休投資帳戶' }).first()
+  await expect(asset).toContainText('USD 1,250')
+  await expect(asset).toContainText(/40,000/)
 })
 
 test('視覺稽核截圖', async ({ page, isMobile }, testInfo) => {
