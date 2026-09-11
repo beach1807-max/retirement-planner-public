@@ -1,14 +1,16 @@
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
-const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
+const TPEX_URL = 'https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&se=EW&o=data'
 const CBC_URL = 'https://cpx.cbc.gov.tw/api/OpenData/FTDOpenData_Day'
 const isoTaiwanDate = (value) => { const digits = String(value ?? '').replace(/\D/g, ''); return digits.length === 7 ? `${Number(digits.slice(0, 3)) + 1911}-${digits.slice(3, 5)}-${digits.slice(5, 7)}` : new Date().toISOString().slice(0, 10) }
 const isoCbcDate = (value) => `${String(value).slice(0, 4)}-${String(value).slice(4, 6)}-${String(value).slice(6, 8)}`
 const parse = (value) => [...new Set(String(value ?? '').split(',').map((item) => item.trim().toUpperCase()).filter((item) => /^(TWSE|TPEX):\d{4,6}[A-Z]?$/.test(item)))].slice(0, 50).map((item) => { const [market, symbol] = item.split(':'); return { market, symbol } })
 const makeQuote = (market, symbol, price, currency, asOf, sourceId) => ({ market, symbol, price: String(price), currency, asOf, sourceId })
+const parseCsvLine = (line) => { const values = []; let value = ''; let quoted = false; for (let index = 0; index < line.length; index += 1) { const char = line[index]; if (char === '"') { if (quoted && line[index + 1] === '"') { value += '"'; index += 1 } else quoted = !quoted } else if (char === ',' && !quoted) { values.push(value); value = '' } else value += char } values.push(value); return values }
+const parseTpexCsv = (text) => { const [headerLine, ...lines] = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean); const headers = parseCsvLine(headerLine); return lines.map((line) => Object.fromEntries(parseCsvLine(line).map((value, index) => [headers[index], value]))) }
 async function taiwan(market, symbols) {
-  const response = await fetch(market === 'TWSE' ? TWSE_URL : TPEX_URL, { headers: { Accept: 'application/json', 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.7', Referer: 'https://www.tpex.org.tw/' } }); if (!response.ok) throw new Error(`${market}_HTTP_${response.status}`)
-  const rows = await response.json()
-  return rows.flatMap((row) => { const symbol = String(row.Code ?? row.SecuritiesCompanyCode ?? row['證券代號'] ?? '').trim(); const price = Number(String(row.ClosingPrice ?? row.Close ?? row['收盤'] ?? '').replace(/,/g, '')); return symbols.includes(symbol) && Number.isFinite(price) ? [makeQuote(market, symbol, price, 'TWD', isoTaiwanDate(row.Date ?? row.TradeDate ?? row['日期']), market === 'TWSE' ? 'twse-openapi-v1' : 'tpex-openapi-v1')] : [] })
+  const response = await fetch(market === 'TWSE' ? TWSE_URL : TPEX_URL, { headers: { Accept: market === 'TWSE' ? 'application/json' : 'text/csv', 'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.7', Referer: 'https://www.tpex.org.tw/' } }); if (!response.ok) throw new Error(`${market}_HTTP_${response.status}`)
+  const rows = market === 'TWSE' ? await response.json() : parseTpexCsv(await response.text())
+  return rows.flatMap((row) => { const symbol = String(row.Code ?? row.SecuritiesCompanyCode ?? row['證券代號'] ?? row['代號'] ?? '').trim(); const price = Number(String(row.ClosingPrice ?? row.Close ?? row['收盤'] ?? '').replace(/,/g, '')); return symbols.includes(symbol) && Number.isFinite(price) ? [makeQuote(market, symbol, price, 'TWD', isoTaiwanDate(row.Date ?? row.TradeDate ?? row['日期'] ?? row['資料日期']), market === 'TWSE' ? 'twse-openapi-v1' : 'tpex-government-open-data-csv')] : [] })
 }
 export async function onRequestGet(context) {
   const instruments = parse(new URL(context.request.url).searchParams.get('instruments')); const fetchedAt = new Date().toISOString(); const errors = []; const quotes = []; let rates = []
