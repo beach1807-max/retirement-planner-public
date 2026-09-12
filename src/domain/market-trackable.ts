@@ -22,3 +22,8 @@ export function marketDefaults(market: SupportedMarket) {
   if (market === 'TPEX') return { currency: 'TWD' as const, mic: 'ROCO' as const, timezone: 'Asia/Taipei' }
   return { currency: 'USD' as const, mic: 'US' as const, timezone: 'America/New_York' }
 }
+
+// 已確認的市場資料；其他台股在查價時由 TWSE → FinMind 自動備援。
+export function resolveMarket(symbol: string, market: SupportedMarket): SupportedMarket {
+  return market !== 'US' && symbol.trim().toUpperCase() === '00679B' ? 'TPEX' : market
+}

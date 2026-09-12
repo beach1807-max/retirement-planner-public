@@ -20,15 +20,18 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
   async fetchLatest(instruments: MarketInstrumentRequest[]): Promise<MarketDataBatch> {
     const supported = instruments.slice(0, 50)
     const twseInstruments = supported.filter((item) => item.market === 'TWSE')
-    const response = await fetch(`${this.endpoint}?instruments=${encodeURIComponent(twseInstruments.map((item) => `TWSE:${item.providerSymbol ?? item.symbol}`).join(','))}`)
-    if (!response.ok) throw new Error(`MARKET_PROVIDER_HTTP_${response.status}`)
-    const payload = await response.json() as ApiResponse
+    let payload: ApiResponse = { quotes: [], rates: [], fetchedAt: new Date().toISOString() }
+    try {
+      const response = await fetch(`${this.endpoint}?instruments=${encodeURIComponent(twseInstruments.map((item) => `TWSE:${item.providerSymbol ?? item.symbol}`).join(','))}`)
+      if (!response.ok) throw new Error(`MARKET_PROVIDER_HTTP_${response.status}`)
+      payload = await response.json() as ApiResponse
+    } catch { payload.errors = [{ message: '台股／匯率來源連線失敗，其他來源仍會繼續更新。' }] }
     const quotes = payload.quotes.flatMap((quote) => {
       return twseInstruments.filter((item) => item.symbol === quote.symbol).map((instrument) => ({ ...quote, instrumentId: instrument.id }))
     })
     const today = new Date().toISOString().slice(0, 10)
     const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
-    const tpexInstruments = supported.filter((item) => item.market === 'TPEX')
+    const tpexInstruments = supported.filter((item) => item.market !== 'US' && !quotes.some((quote) => quote.instrumentId === item.id))
     const tpexErrors: Array<{ instrumentId?: string; message: string }> = []
     await Promise.all(tpexInstruments.map(async (instrument) => {
       try {
@@ -40,7 +43,7 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
         const bar = body.data?.at(-1)
         if (!bar || !Number.isFinite(Number(bar.close))) throw new Error('TPEX_EOD_EMPTY')
         quotes.push({ instrumentId: instrument.id, symbol: instrument.symbol, price: String(bar.close), currency: 'TWD', asOf: bar.date, sourceId: 'finmind-taiwan-stock-price' })
-      } catch { tpexErrors.push({ instrumentId: instrument.id, message: `${instrument.symbol} 上櫃收盤價暫時無法取得。` }) }
+      } catch { tpexErrors.push({ instrumentId: instrument.id, message: `${instrument.symbol} 台股收盤價經 FinMind 重試仍無法取得。` }) }
     }))
     const apiKey = getUsMarketApiKey()
     const usInstruments = supported.filter((item) => item.market === 'US')
@@ -54,14 +57,24 @@ export class OfficialTaiwanMarketDataProvider implements MarketDataProvider {
           const usResponse = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
           if (!usResponse.ok) throw new Error(`US_EOD_HTTP_${usResponse.status}`)
           const body = await usResponse.json() as { bars?: Array<{ date: string; close: number }> }
-          const bar = body.bars?.at(-1)
+          const bar = body.bars?.filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date) && Number.isFinite(item.close) && item.close > 0).sort((a, b) => a.date.localeCompare(b.date)).at(-1)
           if (!bar || !Number.isFinite(Number(bar.close))) throw new Error('US_EOD_EMPTY')
           quotes.push({ instrumentId: instrument.id, symbol: instrument.symbol, price: String(bar.close), currency: 'USD', asOf: bar.date, sourceId: 'stashgamma-eod' })
-        } catch { usErrors.push({ instrumentId: instrument.id, message: `${instrument.symbol} 美股收盤價暫時無法取得。` }) }
+        } catch (error) {
+          const code = error instanceof Error ? error.message : ''
+          const reason = code === 'US_EOD_HTTP_401' ? '401 API Key 無效或已失效，請至預測設定重新儲存。'
+            : code === 'US_EOD_HTTP_404' ? '404 查無此代號的收盤行情。'
+            : code === 'US_EOD_HTTP_429' ? '429 API 額度限制，請稍後再試。'
+            : code === 'US_EOD_EMPTY' ? '回傳資料沒有有效收盤價。'
+            : code.startsWith('US_EOD_HTTP_') ? '行情服務 HTTP ' + code.slice(12) + ' 錯誤。'
+            : error instanceof SyntaxError ? '行情回傳格式錯誤。'
+            : '網路連線失敗（可能為離線或跨來源連線受阻）。'
+          usErrors.push({ instrumentId: instrument.id, message: instrument.symbol + ' ' + reason })
+        }
       }))
     }
-    const missing = supported.filter((item) => !quotes.some((quote) => quote.instrumentId === item.id) && !usErrors.some((error) => error.instrumentId === item.id)).map((item) => ({ instrumentId: item.id, message: `${item.symbol} 查無最新有效收盤價。` }))
-    const apiErrors = (payload.errors ?? []).map((error) => ({ instrumentId: twseInstruments.find((item) => item.symbol === error.symbol)?.id, message: error.message }))
+    const missing = supported.filter((item) => !quotes.some((quote) => quote.instrumentId === item.id) && !tpexErrors.some((error) => error.instrumentId === item.id) && !usErrors.some((error) => error.instrumentId === item.id)).map((item) => ({ instrumentId: item.id, message: `${item.symbol} 查無最新有效收盤價。` }))
+    const apiErrors = (payload.errors ?? []).filter((error) => !error.symbol || !quotes.some((quote) => quote.symbol === error.symbol)).map((error) => ({ instrumentId: twseInstruments.find((item) => item.symbol === error.symbol)?.id, message: error.message }))
     return { quotes, rates: payload.rates, errors: [...apiErrors, ...tpexErrors, ...usErrors, ...missing], fetchedAt: payload.fetchedAt }
   }
 }

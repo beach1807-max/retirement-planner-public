@@ -1,3 +1,4 @@
+import { marketDefaults, resolveMarket } from '../domain/market-trackable'
 import Decimal from 'decimal.js'
 import type { PlannerData } from './planner-data'
 import type { MarketDataProvider } from '../infrastructure/market-data-provider'
@@ -12,6 +13,10 @@ export class MarketDataService {
     try {
       const batch = await this.provider.fetchLatest(data.instruments.map((item) => ({ id: item.id, symbol: item.symbol, market: item.market, currency: item.currency, providerSymbol: item.providerSymbol, instrumentKey: item.instrumentKey })))
       const next = structuredClone(data)
+      next.instruments = next.instruments.map((item) => {
+        const market = resolveMarket(item.symbol, item.market)
+        return market === item.market ? item : { ...item, market, ...marketDefaults(market), instrumentKey: market + ':' + item.symbol, updatedAt: batch.fetchedAt }
+      })
       const updatedAssetIds: string[] = []
       for (const quote of batch.quotes) {
         const instrument = next.instruments.find((item) => item.id === quote.instrumentId)

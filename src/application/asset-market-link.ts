@@ -1,5 +1,5 @@
 import type { PlannerAccount, PlannerData } from './planner-data'
-import { marketDefaults, normalizeMarketSymbol, type SupportedMarket } from '../domain/market-trackable'
+import { marketDefaults, resolveMarket, normalizeMarketSymbol, type SupportedMarket } from '../domain/market-trackable'
 
 export interface AssetMarketLinkInput {
   assetId: string
@@ -23,7 +23,7 @@ export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkI
 
   const symbol = input.symbol?.trim().toUpperCase() ?? ''
   const quantity = input.quantity?.trim() ?? ''
-  const market = input.market ?? 'TWSE'
+  const market = resolveMarket(symbol, input.market ?? 'TWSE')
   if (!normalizeMarketSymbol(market, symbol)) throw new Error('INVALID_MARKET_SYMBOL')
   if (!quantity) throw new Error('MISSING_HOLDING_QUANTITY')
 
