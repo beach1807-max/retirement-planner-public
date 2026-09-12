@@ -6,6 +6,7 @@ import { CalculationHelp } from './CalculationHelp'
 import { DEFAULT_ASSET_RETURN_PRESETS } from '../domain/default-return-presets'
 import type { AssetReturnPresetKey, AssetScenarioRates } from '../domain/models'
 import { getUsMarketApiKey, setUsMarketApiKey } from '../infrastructure/us-market-api-key'
+import { getMassiveApiKey, setMassiveApiKey } from '../infrastructure/massive-api-key'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 
@@ -17,6 +18,8 @@ export function SettingsPage({ data, onChange }: Props) {
   const [presetError, setPresetError] = useState<string | null>(null)
   const [usApiKey, setUsApiKey] = useState(() => getUsMarketApiKey())
   const [usApiKeySaved, setUsApiKeySaved] = useState(false)
+  const [massiveApiKey, setMassiveApiKeyDraft] = useState(() => getMassiveApiKey())
+  const [massiveApiKeySaved, setMassiveApiKeySaved] = useState(false)
   const [presetDrafts, setPresetDrafts] = useState<Record<AssetReturnPresetKey, AssetScenarioRates>>(() => Object.fromEntries(data.assumptions.assetReturnPresets.map((preset) => [preset.key, { ...preset.scenarioRates }])) as Record<AssetReturnPresetKey, AssetScenarioRates>)
   const primary = data.members.find((member) => member.id === data.household.primaryMemberId)!
 
@@ -85,10 +88,14 @@ export function SettingsPage({ data, onChange }: Props) {
         </form>
       </section>
       <section className="panel">
-        <div className="panel-heading"><div><h2>免費美股收盤價</h2><p>使用自己的 StashGamma 免費 API key。金鑰只保存在這台裝置的瀏覽器，不會寫入退休資料、JSON 備份或 Cloudflare。</p></div></div>
+        <div className="panel-heading"><div><h2>美股收盤價</h2><p>使用自己的 Massive 或 StashGamma API Key。金鑰只保存在這台裝置的瀏覽器，不會寫入退休資料、JSON 備份或 Cloudflare。</p></div></div>
+        <form className="settings-form" onSubmit={(event) => { event.preventDefault(); setMassiveApiKey(massiveApiKey); setMassiveApiKeySaved(true); window.setTimeout(() => setMassiveApiKeySaved(false), 2000) }}>
+          <label>Massive API Key<input aria-label="Massive API Key" type="password" autoComplete="off" value={massiveApiKey} onChange={(event) => setMassiveApiKeyDraft(event.target.value)} /><small><a href="https://massive.com/dashboard" target="_blank" rel="noreferrer">由 Massive 帳戶取得</a>。系統優先使用前一交易日收盤價；清空後儲存即可移除此裝置的金鑰。</small></label>
+          <div className="form-actions"><span className="save-status" role="status">{massiveApiKeySaved ? (massiveApiKey.trim() ? 'Massive API Key 已儲存在此瀏覽器。' : 'Massive API Key 已移除。') : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存 Massive API Key</button></div>
+        </form>
         <form className="settings-form" onSubmit={(event) => { event.preventDefault(); setUsMarketApiKey(usApiKey); setUsApiKeySaved(true); window.setTimeout(() => setUsApiKeySaved(false), 2000) }}>
-          <label>StashGamma API key<input aria-label="StashGamma API key" type="password" autoComplete="off" value={usApiKey} onChange={(event) => setUsApiKey(event.target.value)} placeholder="sg_live_…" /><small><a href="https://www.stashgamma.com/free-stock-data-api" target="_blank" rel="noreferrer">免費申請，不需信用卡</a>。清空後儲存即可移除此裝置的金鑰。</small></label>
-          <div className="form-actions"><span className="save-status" role="status">{usApiKeySaved ? (usApiKey.trim() ? '美股 API key 已儲存在此瀏覽器。' : '美股 API key 已移除。') : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存美股 API key</button></div>
+          <label>StashGamma API Key<input aria-label="StashGamma API Key" type="password" autoComplete="off" value={usApiKey} onChange={(event) => setUsApiKey(event.target.value)} placeholder="sg_live_…" /><small><a href="https://www.stashgamma.com/free-stock-data-api" target="_blank" rel="noreferrer">免費申請，不需信用卡</a>。Massive 未設定或查無資料時會自動備援。</small></label>
+          <div className="form-actions"><span className="save-status" role="status">{usApiKeySaved ? (usApiKey.trim() ? 'StashGamma API Key 已儲存在此瀏覽器。' : 'StashGamma API Key 已移除。') : ''}</span><button className="button primary" type="submit"><Save size={18} /> 儲存 StashGamma API Key</button></div>
         </form>
       </section>
       <div className="alert info">目前尚未納入稅務、交易成本與隨機市場波動；勞保／勞退請至「退休制度」依版本化規則估算。</div>

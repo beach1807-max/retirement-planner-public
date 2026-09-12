@@ -9,7 +9,7 @@ import { MarketDataService } from './application/market-data-service'
 import type { ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
-import { OfficialTaiwanMarketDataProvider } from './infrastructure/market-data-provider'
+import { createDefaultMarketDataProvider } from './infrastructure/us-market-data-router'
 import { MobileNavigation } from './components/MobileNavigation'
 
 type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'scenarios' | 'market' | 'settings' | 'backup'
@@ -17,7 +17,7 @@ type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'scenario
 const repository = new DexiePlannerRepository()
 const plannerService = new PlannerService(repository)
 const scenarioService = new ScenarioService(plannerService)
-const marketDataService = new MarketDataService(new OfficialTaiwanMarketDataProvider())
+const marketDataService = new MarketDataService(createDefaultMarketDataProvider())
 const Dashboard = lazy(() => import('./components/Dashboard').then((module) => ({ default: module.Dashboard })))
 const DataPage = lazy(() => import('./components/DataPage').then((module) => ({ default: module.DataPage })))
 const SettingsPage = lazy(() => import('./components/SettingsPage').then((module) => ({ default: module.SettingsPage })))

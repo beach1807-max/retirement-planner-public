@@ -5,6 +5,7 @@ import { upsertAssetMarketLink } from '../application/asset-market-link'
 import { MarketDataService } from '../application/market-data-service'
 import { OfficialTaiwanMarketDataProvider } from '../infrastructure/market-data-provider'
 import { setUsMarketApiKey } from '../infrastructure/us-market-api-key'
+import { createDefaultMarketDataProvider } from '../infrastructure/us-market-data-router'
 import { MarketDataPage } from './MarketDataPage'
 
 const response = (body: unknown) => ({ ok: true, json: async () => body })
@@ -35,7 +36,7 @@ it('VT 請求成功寫入 quote，畫面主要 TWD 與原幣 USD 並存', async 
   const data = upsertAssetMarketLink(initial, { assetId: initial.assets[0].id, enabled: true, symbol: 'VT', market: 'US', quantity: '10' })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ ...base, rates: [{ fromCurrency: 'USD', toCurrency: 'TWD', rate: '32', asOf: '2026-09-11', sourceId: 'test' }] }))
     .mockResolvedValueOnce(response({ bars: [{ date: '2026-09-11', close: 125 }, { date: '2026-09-10', close: 120 }] })))
-  const service = new MarketDataService(new OfficialTaiwanMarketDataProvider())
+  const service = new MarketDataService(createDefaultMarketDataProvider())
   const result = await service.refresh(data)
   expect(result.data.marketQuotes[0]).toMatchObject({ symbol: 'VT', price: '125', currency: 'USD' })
   expect(result.data.assets[0].currentValue).toEqual({ amount: '1250.00', currency: 'USD' })
@@ -51,8 +52,8 @@ it.each([[401, 'API Key'], [404, '查無此代號'], [429, '額度限制'], [0, 
   if (status) fetchMock.mockResolvedValueOnce({ ok: false, status })
   else fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
   vi.stubGlobal('fetch', fetchMock)
-  const result = await new OfficialTaiwanMarketDataProvider().fetchLatest([{ id: 'vt', symbol: 'VT', market: 'US', currency: 'USD' }])
-  expect(result.errors.find(e => e.instrumentId === 'vt')?.message).toContain(message)
+  const result = await createDefaultMarketDataProvider().fetchLatest([{ id: 'vt', symbol: 'VT', market: 'US', currency: 'USD' }])
+  expect(result.errors.some((error) => error.instrumentId === 'vt' && error.message.includes(message as string))).toBe(true)
   expect(fetchMock).toHaveBeenCalledTimes(2)
 })
 
@@ -63,7 +64,7 @@ it('台股來源失敗仍寫入 VT quote，缺匯率時明確提示而不冒充�
   data.assets[0].currentValue = { amount: '900', currency: 'USD' }
   data.exchangeRates = []
   vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('offline')).mockResolvedValueOnce(response({ bars: [{ date: '2026-09-11', close: 125 }] })))
-  const service = new MarketDataService(new OfficialTaiwanMarketDataProvider())
+  const service = new MarketDataService(createDefaultMarketDataProvider())
   const result = await service.refresh(data)
   expect(result.data.marketQuotes[0]).toMatchObject({ symbol: 'VT', price: '125' })
   expect(result.data.assets[0].currentValue).toEqual(data.assets[0].currentValue)

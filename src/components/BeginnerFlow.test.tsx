@@ -87,10 +87,15 @@ describe('新手資料流程', () => {
     const data = createDemoData('2026-09-01')
     const user = userEvent.setup()
     render(<SettingsPage data={data} onChange={vi.fn()} />)
-    await user.type(screen.getByLabelText('StashGamma API key'), 'sg_live_browser_only')
-    await user.click(screen.getByRole('button', { name: '儲存美股 API key' }))
+    await user.type(screen.getByLabelText('StashGamma API Key'), 'sg_live_browser_only')
+    await user.click(screen.getByRole('button', { name: '儲存 StashGamma API Key' }))
     expect(localStorage.getItem('retirement-planner-us-eod-api-key-v1')).toBe('sg_live_browser_only')
-    expect(screen.getByText('美股 API key 已儲存在此瀏覽器。')).toBeInTheDocument()
+    expect(screen.getByText('StashGamma API Key 已儲存在此瀏覽器。')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Massive API Key'), 'massive_browser_only')
+    await user.click(screen.getByRole('button', { name: '儲存 Massive API Key' }))
+    expect(localStorage.getItem('retirement-planner-massive-api-key-v1')).toBe('massive_browser_only')
+    expect(localStorage.getItem('retirement-planner-us-eod-api-key-v1')).toBe('sg_live_browser_only')
+    expect(JSON.stringify(data)).not.toContain('massive_browser_only')
   })
 
   it('儲存一般設定仍保留收合的舊版資料與相同預測結果', async () => {
