@@ -11,12 +11,16 @@ import { MemberManagement } from './MemberManagement'
 import { defaultAllocationClassForAssetType } from '../domain/asset-classification'
 import { inferTwseSymbolFromAssetName, isMarketTrackableAssetType, type SupportedMarket } from '../domain/market-trackable'
 import { upsertAssetMarketLink } from '../application/asset-market-link'
+import { removeAsset, type QuickAssetDraft } from '../application/quick-add-asset'
+import { QuickAddAsset } from './QuickAddAsset'
 
-interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
+interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void>; onQuickAdd?: (draft: QuickAssetDraft) => Promise<boolean>; onOpenPortfolio?: () => void }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
 const statusLabels = { provided: '已設定', notProvided: '尚未設定', notApplicable: '不適用' }
 
-export function DataPage({ data, onChange, summary }: Props) {
+export function DataPage({ data, onChange, summary, onQuickAdd, onOpenPortfolio }: Props) {
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [quickMessage, setQuickMessage] = useState('')
   const [assetEditor, setAssetEditor] = useState<string | 'new' | null>(data.assets.length === 0 ? 'new' : null)
   const [contributionEditor, setContributionEditor] = useState<string | 'new' | null>(null)
   const [ownershipType, setOwnershipType] = useState<PlannerAsset['ownershipType']>('individual')
@@ -155,7 +159,9 @@ export function DataPage({ data, onChange, summary }: Props) {
     <MemberManagement data={data} onChange={onChange} />
 
     <section className="panel">
-      <div className="panel-heading"><div><h2><WalletCards size={21} /> 我的資產</h2><p>把目前擁有的資產記錄在這裡。記錄後，到「投資組合」選擇哪些資產要加入預測；所有金額以新臺幣填寫。</p></div><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button></div>
+      <div className="panel-heading"><div><h2><WalletCards size={21} /> 我的資產</h2><p>把目前擁有的資產記錄在這裡。記錄後，到「投資組合」選擇哪些資產要加入預測；請依資產原始幣別填寫金額。</p></div><div className="quick-entry-actions"><button className="button secondary" onClick={() => editAsset()}><Plus size={18} /> 新增資產</button>{onQuickAdd && <button className="button secondary" onClick={() => { setQuickOpen(true); setQuickMessage('') }}>快速新增資產 Beta</button>}</div></div>
+      {quickMessage && <div className="alert success" role="status">{quickMessage} {onOpenPortfolio && <button className="button small secondary" onClick={onOpenPortfolio}>前往投資組合</button>}</div>}
+      {quickOpen && onQuickAdd && <QuickAddAsset data={data} onCommit={onQuickAdd} onCancel={() => setQuickOpen(false)} onComplete={(joined) => { setQuickOpen(false); setQuickMessage(joined ? '已儲存資產並加入投資組合與長期預測。' : '已儲存資產，尚未加入投資組合與長期預測。') }} />}
       {assetEditor && <form key={assetEditor} className="editor-form" onSubmit={saveAsset}>
         <h3>基本資料</h3><p className="muted">這是什麼、現在值多少、是誰的。</p><div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} onChange={(event) => { if (!symbol) setSymbol(inferTwseSymbolFromAssetName(event.target.value) ?? '') }} /></label>
@@ -182,7 +188,8 @@ export function DataPage({ data, onChange, summary }: Props) {
           <label className="checkbox-row"><input name="includeInTotalAssets" type="checkbox" defaultChecked={editedAsset?.includeInTotalAssets ?? true} /><span>納入總資產</span></label>
         </div></details>{error && <div className="field-error" role="alert">{error}</div>}<div className="form-actions mobile-sticky-actions"><button className="button ghost" type="button" onClick={() => setAssetEditor(null)}>取消</button><button className="button primary" type="submit">儲存資產</button></div>
       </form>}
-      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{formatMoney(asset.currentValue)}{asset.currentValue.currency !== 'TWD' && <small>{moneyToTwd(data, asset.currentValue) ? '約 ' + currency.format(moneyToTwd(data, asset.currentValue)!.toNumber()) : '缺少匯率，尚未納入台幣合計'}</small>}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => { const instrumentIds = new Set(data.instruments.filter((item) => item.assetId === asset.id).map((item) => item.id)); void onChange({ ...data, assets: data.assets.filter((item) => item.id !== asset.id), contributions: data.contributions.filter((item) => item.destinationAssetId !== asset.id), holdings: data.holdings.filter((item) => item.assetId !== asset.id), instruments: data.instruments.filter((item) => item.assetId !== asset.id), marketQuotes: data.marketQuotes.filter((item) => !instrumentIds.has(item.instrumentId)) }) }}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
+      <p className="muted">刪除資產會一併移除其持有部位、行情、指定投入，以及投資組合與情境中的相關引用。</p>
+      <div className="data-list">{data.assets.map((asset) => <article key={asset.id}><div><strong>{asset.name}</strong><p>{statusLabels[asset.status]} · {asset.retirementUsageScope === 'household' ? '家庭退休可用' : asset.retirementUsageScope === 'personal' ? '個人退休使用' : '已排除'}</p></div><strong>{formatMoney(asset.currentValue)}{asset.currentValue.currency !== 'TWD' && <small>{moneyToTwd(data, asset.currentValue) ? '約 ' + currency.format(moneyToTwd(data, asset.currentValue)!.toNumber()) : '缺少匯率，尚未納入台幣合計'}</small>}</strong><button className="icon-button" aria-label={`編輯 ${asset.name}`} onClick={() => editAsset(asset)}><Pencil size={18} /></button><button className="icon-button danger" aria-label={`刪除 ${asset.name}`} onClick={() => { void onChange(removeAsset(data, asset.id)) }}><Trash2 size={18} /></button></article>)}{data.assets.length === 0 && <div className="empty-state">尚未建立資產。至少加入一筆資產或明確的 0 元起始資產。</div>}</div>
     </section>
 
     <section className="panel">

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { buildQuickAsset, type QuickAssetDraft } from './application/quick-add-asset'
 import { ArchiveRestore, ChartNoAxesCombined, Database, FlaskConical, House, PieChart, RefreshCw, Scale, Settings } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { createDemoData, type PlannerData } from './application/planner-data'
@@ -55,6 +56,9 @@ export function App() {
   }, [])
 
   const activeData = demoData ?? data
+  const latestData = useRef(activeData)
+  const saveInProgress = useRef(false)
+  useEffect(() => { latestData.current = activeData }, [activeData])
 
   useEffect(() => {
     if (!activeData) return
@@ -65,19 +69,35 @@ export function App() {
     return () => { active = false }
   }, [activeData])
 
-  async function saveData(next: PlannerData) {
-    setProjection(null)
+  async function persistData(next: PlannerData): Promise<boolean> {
+    if (saveInProgress.current) return false
+    saveInProgress.current = true
     try {
       const saved = await plannerService.save(next)
+      setProjection(null)
       setData(saved)
+      latestData.current = saved
       setPersistenceError(null)
+      return true
     } catch (error) {
       setPersistenceError(error instanceof Error && error.message.startsWith('INVALID_') ? '資料欄位或關聯無效，尚未儲存。請檢查輸入。' : '無法寫入瀏覽器本機資料庫。請立即匯出備份。')
+      return false
+    } finally {
+      saveInProgress.current = false
     }
   }
 
+  async function saveData(next: PlannerData) { await persistData(next) }
+
+  async function addQuickAsset(draft: QuickAssetDraft): Promise<boolean> {
+    if (!latestData.current || saveInProgress.current) return false
+    const next = buildQuickAsset(latestData.current, draft)
+    if (demoData) { latestData.current = next; setDemoData(next); return true }
+    return persistData(next)
+  }
+
   async function saveActiveData(next: PlannerData) {
-    if (demoData) { setDemoData(next); return }
+    if (demoData) { latestData.current = next; setDemoData(next); return }
     await saveData(next)
   }
 
@@ -167,7 +187,7 @@ export function App() {
 
         <Suspense fallback={<div className="panel" role="status">正在載入功能…</div>}>
           {page === 'dashboard' && <Dashboard service={plannerService} data={activeData} systemEstimates={plannerService.retirementSystems(activeData)} portfolio={plannerService.portfolio(activeData)} projection={projection} calculating={projection === null} financialOverview={plannerService.financialOverview(activeData)} onContinueFullPlan={() => navigate('data')} onOpenData={() => navigate('data')} />}
-          {page === 'data' && <DataPage data={activeData} summary={plannerService.dashboard(activeData, 'household')} onChange={saveActiveData} />}
+          {page === 'data' && <DataPage data={activeData} summary={plannerService.dashboard(activeData, 'household')} onChange={saveActiveData} onQuickAdd={addQuickAsset} onOpenPortfolio={() => navigate('portfolio')} />}
           {page === 'settings' && <SettingsPage data={activeData} onChange={saveActiveData} />}
           {page === 'retirementSystems' && <RetirementSystemsPage data={activeData} estimates={plannerService.retirementSystems(activeData)} onChange={saveActiveData} />}
           {page === 'portfolio' && <PortfolioPage data={activeData} result={plannerService.portfolio(activeData)} onChange={saveActiveData} />}

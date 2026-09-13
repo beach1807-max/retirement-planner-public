@@ -16,7 +16,8 @@ export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkI
   if (!input.enabled) {
     const instrumentIds = new Set(next.instruments.filter((item) => item.assetId === input.assetId).map((item) => item.id))
     next.instruments = next.instruments.filter((item) => item.assetId !== input.assetId)
-    next.holdings = next.holdings.filter((item) => item.assetId !== input.assetId)
+    // 無行情的手動部位在一般編輯時保留；明確停用既有行情才清除部位。
+    if (instrumentIds.size) next.holdings = next.holdings.filter((item) => item.assetId !== input.assetId)
     next.marketQuotes = next.marketQuotes.filter((item) => !instrumentIds.has(item.instrumentId))
     return next
   }
@@ -40,9 +41,10 @@ export function upsertAssetMarketLink(data: PlannerData, input: AssetMarketLinkI
   }
 
   const existingInstrument = next.instruments.find((item) => item.assetId === input.assetId)
+  const assetType = next.assets.find((item) => item.id === input.assetId)?.assetType
   const instrument = {
     id: existingInstrument?.id ?? crypto.randomUUID(), householdId: next.household.id, assetId: input.assetId,
-    symbol, market, ...marketDefaults(market), providerSymbol: symbol, instrumentKey: `${market}:${symbol}`, instrumentType: 'stock' as const, createdAt: existingInstrument?.createdAt ?? now, updatedAt: now,
+    symbol, market, ...marketDefaults(market), providerSymbol: symbol, instrumentKey: `${market}:${symbol}`, instrumentType: assetType === 'etf' ? 'etf' as const : assetType === 'stock' ? 'stock' as const : existingInstrument?.instrumentType ?? 'stock' as const, createdAt: existingInstrument?.createdAt ?? now, updatedAt: now,
   }
   next.instruments = existingInstrument
     ? next.instruments.map((item) => item.id === existingInstrument.id ? instrument : item)
