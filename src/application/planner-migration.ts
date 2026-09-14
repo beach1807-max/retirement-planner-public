@@ -51,25 +51,40 @@ export function migratePlannerData(value: unknown): PlannerData {
       timezone: item.timezone ?? (item.market === 'US' ? 'America/New_York' : 'Asia/Taipei'),
     })),
   })
+  const toV11 = (current: PlannerData): PlannerData => ({
+    ...current,
+    schemaVersion: 'planner-data-v0.11',
+    instruments: Array.isArray(current.instruments) ? current.instruments : [],
+    marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [],
+    exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [],
+    marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [],
+    liabilities: current.liabilities.map((liability) => ({
+      ...liability,
+      balanceAsOfMonth: liability.balanceAsOfMonth ?? current.calculationBaseDate.slice(0, 7),
+      repaymentType: liability.repaymentType ?? 'manual',
+      includeInTotalLiabilities: liability.includeInTotalLiabilities ?? true,
+    })),
+  })
+  if (data.schemaVersion === 'planner-data-v0.11') return toV11(data as unknown as PlannerData)
   if (data.schemaVersion === 'planner-data-v0.10') {
     const current = data as unknown as PlannerData
-    return toV10({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] })
+    return toV11(toV10({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] }))
   }
   if (data.schemaVersion === 'planner-data-v0.9') {
     const current = data as unknown as PlannerData
-    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray) && Array.isArray(current.assumptions?.assetReturnPresets)) return toV10(current)
-    return toV10(toV09({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] }))
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray) && Array.isArray(current.assumptions?.assetReturnPresets)) return toV11(toV10(current))
+    return toV11(toV10(toV09({ ...current, instruments: Array.isArray(current.instruments) ? current.instruments : [], marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [], exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [], marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [] })))
   }
   if (data.schemaVersion === 'planner-data-v0.8') {
     const current = data as unknown as PlannerData
-    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return toV10(toV09(current))
-    return toV09({
+    if ([current.instruments, current.marketQuotes, current.exchangeRates, current.marketDataStamps].every(Array.isArray)) return toV11(toV10(toV09(current)))
+    return toV11(toV10(toV09({
       ...current,
       instruments: Array.isArray(current.instruments) ? current.instruments : [],
       marketQuotes: Array.isArray(current.marketQuotes) ? current.marketQuotes : [],
       exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [],
       marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [],
-    })
+    })))
   }
   if (data.schemaVersion === 'planner-data-v0.7') {
     const current = data as unknown as PlannerData
@@ -80,13 +95,13 @@ export function migratePlannerData(value: unknown): PlannerData {
       exchangeRates: Array.isArray(current.exchangeRates) ? current.exchangeRates : [],
       marketDataStamps: Array.isArray(current.marketDataStamps) ? current.marketDataStamps : [],
     }
-    return toV09(normalized)
+    return toV11(toV10(toV09(normalized)))
   }
-  if (data.schemaVersion === 'planner-data-v0.6') return toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | keyof typeof marketFields>), ...marketFields })
-  if (data.schemaVersion === 'planner-data-v0.5') return toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'scenarios' | keyof typeof marketFields>), scenarios: [], ...marketFields })
-  if (data.schemaVersion === 'planner-data-v0.4') return toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), portfolios: [], scenarios: [], ...marketFields })
-  if (data.schemaVersion === 'planner-data-v0.3') return toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'retirementSystems' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), retirementSystems: [], portfolios: [], scenarios: [], ...marketFields })
-  if (data.schemaVersion === 'planner-data-v0.2') return toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'accounts' | 'holdings' | 'incomes' | 'expenses' | 'liabilities' | 'retirementSystems' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [], ...marketFields })
+  if (data.schemaVersion === 'planner-data-v0.6') return toV11(toV10(toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | keyof typeof marketFields>), ...marketFields })))
+  if (data.schemaVersion === 'planner-data-v0.5') return toV11(toV10(toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'scenarios' | keyof typeof marketFields>), scenarios: [], ...marketFields })))
+  if (data.schemaVersion === 'planner-data-v0.4') return toV11(toV10(toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), portfolios: [], scenarios: [], ...marketFields })))
+  if (data.schemaVersion === 'planner-data-v0.3') return toV11(toV10(toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'retirementSystems' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), retirementSystems: [], portfolios: [], scenarios: [], ...marketFields })))
+  if (data.schemaVersion === 'planner-data-v0.2') return toV11(toV10(toV09({ ...(data as unknown as Omit<PlannerData, 'schemaVersion' | 'accounts' | 'holdings' | 'incomes' | 'expenses' | 'liabilities' | 'retirementSystems' | 'portfolios' | 'scenarios' | keyof typeof marketFields>), accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [], ...marketFields })))
   if (data.schemaVersion !== 'planner-data-v0.1' || typeof data.updatedAt !== 'string') throw new Error('UNSUPPORTED_SCHEMA_VERSION')
   const legacy = data as unknown as {
     calculationBaseDate: string; household: PlannerData['household']; members: PlannerData['members'];
@@ -95,7 +110,7 @@ export function migratePlannerData(value: unknown): PlannerData {
     retirementPlan: PlannerData['retirementPlan']; assumptions: PlannerData['assumptions']; updatedAt: string
   }
   const timestamp = legacy.updatedAt
-  return {
+  return toV11(toV10({
     schemaVersion: 'planner-data-v0.9', calculationBaseDate: legacy.calculationBaseDate,
     household: { ...legacy.household, createdAt: legacy.household.createdAt ?? timestamp, updatedAt: legacy.household.updatedAt ?? timestamp },
     members: legacy.members.map((member) => ({ ...member, createdAt: member.createdAt ?? timestamp, updatedAt: member.updatedAt ?? timestamp })),
@@ -104,5 +119,5 @@ export function migratePlannerData(value: unknown): PlannerData {
     retirementPlan: legacy.retirementPlan, assumptions: { ...legacy.assumptions, assetReturnPresets: cloneDefaultAssetReturnPresets() },
     accounts: [], holdings: [], incomes: [], expenses: [], liabilities: [], retirementSystems: [], portfolios: [], scenarios: [], ...marketFields,
     ruleVersion: 'rules-none-v0.1', retirementMode: 'support-to-plan-end-v0.1', updatedAt: timestamp,
-  }
+  } as PlannerData))
 }

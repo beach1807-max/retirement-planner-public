@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js'
 import { addMonths, monthIndex, toMonth } from './date'
 import type { CalculationMessage, ProjectionInput, ProjectionResult, ProjectionScenario, AssetScenarioRates } from './models'
+import { liabilityBalanceAt, projectLiability } from './liability-engine'
 
 const ZERO = new Decimal(0)
 const HORIZONS = [10, 15, 20, 25, 30, 35] as const
@@ -36,6 +37,11 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
   if (inflation.lte(-1)) throw new Error('INVALID_INFLATION_RATE')
 
   const warnings: CalculationMessage[] = []
+  const liabilityInputs = input.liabilities ?? []
+  const liabilityResults = liabilityInputs.map((item) => projectLiability({ id: item.id, name: item.name, balanceAsOfMonth: item.balanceAsOfMonth, currentBalance: item.currentBalanceTwd, annualInterestRate: item.annualInterestRate, repaymentType: item.repaymentType, remainingTermMonths: item.remainingTermMonths, fixedMonthlyPayment: item.fixedMonthlyPaymentTwd, gracePeriodMonths: item.gracePeriodMonths, rateChanges: item.rateChanges, extraPayments: item.extraPayments?.map((event) => ({ month: event.month, amount: event.amountTwd })) }))
+  liabilityResults.filter((item) => item.status === 'manual').forEach((item) => warnings.push({ code: 'LIABILITY_TERMS_REQUIRED', message: `負債「${item.name}」尚未設定利率、還款方式與期數，未納入未來負債比較。`, entityId: item.id }))
+  liabilityResults.filter((item) => item.status === 'unpayable').forEach((item) => warnings.push({ code: 'LIABILITY_NOT_PAYABLE', message: `負債「${item.name}」依目前設定無法在期數內清償，請檢查月付款與利率。`, entityId: item.id }))
+  const allLiabilitiesPayoffMonth = liabilityResults.length > 0 && liabilityResults.every((item) => item.status === 'calculated' && item.payoffMonth) ? liabilityResults.map((item) => item.payoffMonth!).sort().at(-1) : undefined
   const assets = input.assets.filter((asset) => asset.status === 'provided')
   const excludedAssets = input.assets.filter((asset) => asset.status !== 'provided').map((asset) => ({ id: asset.id, reason: asset.status === 'notProvided' ? '資產金額尚未設定' : '資產標記為不適用' }))
   input.assets.filter((asset) => asset.status === 'notProvided').forEach((asset) => warnings.push({ code: 'ASSET_NOT_PROVIDED', message: `投資資產「${asset.name}」尚未設定。`, entityId: asset.id }))
@@ -85,8 +91,11 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
         const laborPension = pensionBalances.reduce((sum, item) => sum.plus(item.balance), ZERO)
         const total = investment.plus(laborPension)
         const elapsedYears = new Decimal(cursor - monthIndex(baseMonth)).div(12)
-        const real = total.div(new Decimal(1).plus(inflation).pow(elapsedYears))
-        const values = { month, investmentAssetsNominal: money(investment), laborPensionAssetsNominal: money(laborPension), totalAssetsNominal: money(total), totalAssetsReal: money(real) }
+        const inflationFactor = new Decimal(1).plus(inflation).pow(elapsedYears)
+        const real = total.div(inflationFactor)
+        const remainingLiabilities = liabilityResults.filter((item) => item.status === 'calculated').reduce((sum, item) => sum.plus(liabilityBalanceAt(item, month, liabilityInputs.find((inputItem) => inputItem.id === item.id)?.currentBalanceTwd ?? '0')), ZERO)
+        const lessLiabilities = total.minus(remainingLiabilities)
+        const values = { month, investmentAssetsNominal: money(investment), laborPensionAssetsNominal: money(laborPension), totalAssetsNominal: money(total), totalAssetsReal: money(real), remainingLiabilitiesNominal: money(remainingLiabilities), remainingLiabilitiesReal: money(remainingLiabilities.div(inflationFactor)), investmentAssetsLessLiabilitiesNominal: money(lessLiabilities), investmentAssetsLessLiabilitiesReal: money(lessLiabilities.div(inflationFactor)) }
         if (years) milestones.push({ yearsFromNow: years, ...values })
         if (isTargetRetirement) targetRetirementMilestone = values
       }
@@ -94,5 +103,5 @@ export async function projectRetirement(input: ProjectionInput): Promise<Project
     return { ...scenario, investmentAnnualReturnRates, laborPensionAnnualReturnRates, milestones, targetRetirementMilestone }
   })
 
-  return { contractVersion: 'projection-contract-v0.2', calculationBaseDate: input.calculationBaseDate, inflationRate: input.annualInflationRate, horizons: [...HORIZONS], targetRetirementMonth, scenarios, warnings, includedAssetIds: assets.map((asset) => asset.id), excludedAssets }
+  return { contractVersion: 'projection-contract-v0.2', calculationBaseDate: input.calculationBaseDate, inflationRate: input.annualInflationRate, horizons: [...HORIZONS], targetRetirementMonth, scenarios, warnings, includedAssetIds: assets.map((asset) => asset.id), excludedAssets, liabilityResults, allLiabilitiesPayoffMonth }
 }

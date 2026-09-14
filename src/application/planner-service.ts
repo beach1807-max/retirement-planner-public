@@ -7,6 +7,7 @@ import { projectRetirement } from '../domain/projection-engine'
 import { estimateRetirementSystem, retirementEligibilityAtMonth, TAIWAN_LABOR_RULES_2026, type RetirementSystemEstimate } from '../domain/retirement-system'
 import { calculateRebalancing, type RebalancingResult } from '../domain/rebalancing-engine'
 import type { Asset, CalculationInput, CalculationResult, Contribution, Household, Member, ProjectionInput, ProjectionResult } from '../domain/models'
+import { projectLiability } from '../domain/liability-engine'
 import type { PlannerRepository } from '../infrastructure/planner-repository'
 import { migratePlannerData } from './planner-migration'
 import type { MoneyAmount, OwnershipFields, PlannerData } from './planner-data'
@@ -66,7 +67,16 @@ export function validatePlannerData(data: PlannerData): void {
   for (const item of [...data.accounts, ...data.incomes, ...data.expenses, ...data.liabilities]) validateOwnership(item, memberIds)
   for (const income of data.incomes) validateMoney(income.monthlyAmount)
   for (const expense of data.expenses) validateMoney(expense.monthlyAmount)
-  for (const liability of data.liabilities) { validateMoney(liability.currentBalance); validateMoney(liability.monthlyPayment) }
+  for (const liability of data.liabilities) {
+    validateMoney(liability.currentBalance); validateMoney(liability.monthlyPayment)
+    if (liability.originalPrincipal) validateMoney(liability.originalPrincipal)
+    liability.extraPayments?.forEach((event) => validateMoney(event.amount))
+    if (liability.annualInterestRate !== undefined && (!new Decimal(liability.annualInterestRate).isFinite() || new Decimal(liability.annualInterestRate).lt(0))) throw new Error('INVALID_LIABILITY_RATE')
+    if (liability.remainingTermMonths !== undefined && (!Number.isInteger(liability.remainingTermMonths) || liability.remainingTermMonths < 1)) throw new Error('INVALID_LIABILITY_TERM')
+    if ((liability.gracePeriodMonths ?? 0) < 0 || (liability.remainingTermMonths !== undefined && (liability.gracePeriodMonths ?? 0) >= liability.remainingTermMonths)) throw new Error('INVALID_LIABILITY_GRACE_PERIOD')
+    if (liability.repaymentType && liability.repaymentType !== 'manual' && (liability.annualInterestRate === undefined || !liability.remainingTermMonths)) throw new Error('LIABILITY_TERMS_REQUIRED')
+    if (liability.repaymentType === 'fixedPayment' && new Decimal(liability.monthlyPayment.amount).lte(0)) throw new Error('LIABILITY_PAYMENT_REQUIRED')
+  }
   for (const holding of data.holdings) {
     if (!data.accounts.some((account) => account.id === holding.accountId) || !data.assets.some((asset) => asset.id === holding.assetId)) throw new Error('ORPHAN_HOLDING')
     if (!new Decimal(holding.quantity).isFinite() || new Decimal(holding.quantity).lt(0)) throw new Error('INVALID_HOLDING_QUANTITY')
@@ -155,6 +165,7 @@ export class PlannerService {
         const pension = record.laborPension
         return { id: record.id, memberName: member?.name ?? '未知成員', currentBalanceTwd: pension.currentAccountBalanceTwd, monthlyContributionTwd: new Decimal(pension.monthlyContributionSalaryTwd).mul(new Decimal(pension.employerContributionRate).plus(pension.voluntaryContributionRate)).toString(), annualReturnRate: pension.projectedAnnualReturnRate, claimMonth: member ? addMonths(member.birthDate, pension.claimAge * 12) : data.calculationBaseDate.slice(0, 7), status: record.status === 'provided' && pension.enabled ? 'provided' : record.status === 'notProvided' ? 'notProvided' : 'notApplicable' }
       }),
+      liabilities: options.scope ? [] : data.liabilities.filter((item) => item.status === 'provided' && item.includeInTotalLiabilities !== false && moneyToTwd(data, item.currentBalance)).map((item) => ({ id: item.id, name: item.name, balanceAsOfMonth: item.balanceAsOfMonth ?? data.calculationBaseDate.slice(0, 7), currentBalanceTwd: moneyToTwd(data, item.currentBalance)!.toFixed(2), annualInterestRate: item.annualInterestRate, repaymentType: item.repaymentType, remainingTermMonths: item.remainingTermMonths, fixedMonthlyPaymentTwd: moneyToTwd(data, item.monthlyPayment)?.toFixed(2), gracePeriodMonths: item.gracePeriodMonths, rateChanges: item.rateChanges, extraPayments: item.extraPayments?.flatMap((event) => { const amount = moneyToTwd(data, event.amount); return amount ? [{ month: event.month, amountTwd: amount.toFixed(2) }] : [] }) })),
     }
     const result = await projectRetirement(input)
     for (const asset of data.assets.filter((item) => selectedIds.has(item.id) && item.status === 'provided' && !moneyToTwd(data, item.currentValue))) {
@@ -206,7 +217,7 @@ export class PlannerService {
       return share ? converted.mul(share) : null
     }
     const assets = data.assets.flatMap((asset) => asset.includeInTotalAssets && asset.status === 'provided' ? [scopedValue(asset.currentValue, asset)].filter((value): value is Decimal => value !== null) : [])
-    const liabilities = data.liabilities.flatMap((item) => item.status === 'provided' ? [scopedValue(item.currentBalance, item)].filter((value): value is Decimal => value !== null) : [])
+    const liabilities = data.liabilities.flatMap((item) => item.status === 'provided' && item.includeInTotalLiabilities !== false ? [scopedValue(item.currentBalance, item)].filter((value): value is Decimal => value !== null) : [])
     const totalAssets = assets.reduce((sum, value) => sum.plus(value), new Decimal(0))
     const totalLiabilities = liabilities.reduce((sum, value) => sum.plus(value), new Decimal(0))
     const missingDataCount = [...data.assets, ...data.incomes, ...data.expenses, ...data.liabilities].filter((item) => item.status === 'notProvided').length
@@ -221,7 +232,14 @@ export class PlannerService {
     }
     const income = total(data.incomes, 'monthlyAmount')
     const expense = total(data.expenses, 'monthlyAmount')
-    const debt = total(data.liabilities, 'monthlyPayment')
+    const liabilityPayments = data.liabilities.filter((item) => item.status === 'provided').map((item) => {
+      const balance = moneyToTwd(data, item.currentBalance)
+      const fixed = moneyToTwd(data, item.monthlyPayment)
+      if (!balance || !fixed) return null
+      const calculated = projectLiability({ id: item.id, name: item.name, balanceAsOfMonth: item.balanceAsOfMonth ?? data.calculationBaseDate.slice(0, 7), currentBalance: balance.toString(), annualInterestRate: item.annualInterestRate, repaymentType: item.repaymentType, remainingTermMonths: item.remainingTermMonths, fixedMonthlyPayment: fixed.toString(), gracePeriodMonths: item.gracePeriodMonths })
+      return calculated.schedule[0]?.payment ?? fixed.toFixed(2)
+    })
+    const debt = data.liabilities.some((item) => item.status !== 'provided') || liabilityPayments.some((value) => value === null) ? undefined : liabilityPayments.reduce((sum, value) => sum.plus(value!), new Decimal(0)).toFixed(2)
     const baseMonth = data.calculationBaseDate.slice(0, 7)
     const activeContributions = data.contributions.filter((item) => contributionActiveInMonth(data, item, baseMonth))
     const contributionTwd = data.contributions.length === 0 || data.contributions.some((item) => item.status === 'notProvided') || activeContributions.some((item) => !moneyToTwd(data, item.amount)) ? undefined : activeContributions.reduce((sum, item) => sum.plus(moneyToTwd(data, item.amount)!), new Decimal(0)).toFixed(2)

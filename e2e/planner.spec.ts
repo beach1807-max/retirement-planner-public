@@ -201,6 +201,19 @@ test('Dashboard 顯示家庭財務概況與未提供資料狀態', async ({ page
   await expect(page.getByRole('heading', { name: '家庭成員' })).toBeVisible()
 })
 
+test('負債可推估清償時間並與投資預測共同呈現', async ({ page }) => {
+  await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
+  const comparison = page.getByRole('heading', { name: '負債清償與投資比較' }).locator('xpath=ancestor::section[1]')
+  await expect(comparison).toContainText('全部負債預計清償', { timeout: 15_000 })
+  await expect(comparison).toContainText(/預計 \d{4}-\d{2} 清償/)
+  await expect(comparison).toContainText('投資資產扣除負債')
+  await page.getByRole('button', { name: '家庭資料', exact: true }).click()
+  await page.getByRole('button', { name: '負債', exact: true }).click()
+  await page.getByLabel('負債類型').selectOption('other')
+  await expect(page.getByText('選擇這筆負債需要的資料')).toBeVisible()
+  await expect(page.getByText(/不需要填寫收入或逐月現金流/)).toBeVisible()
+})
+
 test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   const scenarioHelp = page.getByRole('button', { name: '說明：預設與自訂報酬情境' })
@@ -372,8 +385,8 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
   await expect(page.locator('.projection-table tbody tr')).toContainText('25 年後')
   await expect(page.locator('.projection-breakdown')).toContainText('25 年後')
-  await expect(page.locator('.recharts-line-curve')).toHaveCount(3)
-  await expect(page.locator('.recharts-line-dot')).toHaveCount(21)
+  await expect(page.locator('.recharts-line-curve')).toHaveCount(5)
+  await expect(page.locator('.recharts-line-dot')).toHaveCount(35)
   const chartBox = await page.locator('.chart-wrap').boundingBox()
   const allocationBox = await page.locator('.allocation-summary').boundingBox()
   expect(allocationBox!.y).toBeLessThan(chartBox!.y)

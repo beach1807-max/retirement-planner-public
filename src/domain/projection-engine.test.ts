@@ -74,4 +74,22 @@ describe('固定期間投資與勞退預測', () => {
     expect(result.excludedAssets[0].reason).toContain('尚未設定')
     expect(result.warnings[0].code).toBe('ASSET_NOT_PROVIDED')
   })
+
+  it('在相同月份比較投資資產、剩餘負債與扣除負債後金額', async () => {
+    const input = fixture()
+    input.liabilities = [{ id: 'loan', name: '無息借款', balanceAsOfMonth: '2026-09', currentBalanceTwd: '1200000', annualInterestRate: '0', repaymentType: 'fixedPayment', remainingTermMonths: 120, fixedMonthlyPaymentTwd: '10000' }]
+    const result = await projectRetirement(input)
+    const tenYears = result.scenarios.find((item) => item.id === 'balanced')!.milestones[0]
+    expect(result.allLiabilitiesPayoffMonth).toBe('2036-09')
+    expect(tenYears.remainingLiabilitiesNominal).toBe('0.00')
+    expect(Number(tenYears.investmentAssetsLessLiabilitiesNominal)).toBe(Number(tenYears.totalAssetsNominal))
+  })
+
+  it('舊負債條件不足時保留投資預測並清楚警告', async () => {
+    const input = fixture()
+    input.liabilities = [{ id: 'legacy', name: '舊房貸', balanceAsOfMonth: '2026-09', currentBalanceTwd: '500000' }]
+    const result = await projectRetirement(input)
+    expect(result.warnings.some((item) => item.code === 'LIABILITY_TERMS_REQUIRED')).toBe(true)
+    expect(result.allLiabilitiesPayoffMonth).toBeUndefined()
+  })
 })

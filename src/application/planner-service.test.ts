@@ -50,7 +50,7 @@ describe('Planner Service 與遷移', () => {
   it('v0.1 遷移使用原更新時間，且 TWD 計算輸入與結果保持一致', async () => {
     const legacy = legacyData()
     const migrated = migratePlannerData(legacy)
-    expect(migrated.schemaVersion).toBe('planner-data-v0.9')
+    expect(migrated.schemaVersion).toBe('planner-data-v0.11')
     expect(migrated.assets[0].currentValue).toEqual({ amount: '5000000', currency: 'TWD' })
     expect(migrated.assets[0].createdAt).toBe(legacy.updatedAt)
     const legacyInput = { contractVersion: 'calculation-contract-v0.1', calculationId: `calculation-${legacy.household.id}`, calculationBaseDate: legacy.calculationBaseDate, household: legacy.household, members: legacy.members, assets: legacy.assets, contributions: legacy.contributions, retirementPlan: legacy.retirementPlan, assumptions: legacy.assumptions, ruleVersion: 'rules-none-v0.1' } as CalculationInput
@@ -89,7 +89,7 @@ describe('Planner Service 與遷移', () => {
     const data = createDemoData('2026-09-01')
     data.incomes = [{ ...data.incomes[0], monthlyAmount: { amount: '100000', currency: 'TWD' }, ownershipType: 'joint', ownerMemberId: undefined, owners: [{ memberId: data.members[0].id, share: '0.5' }, { memberId: data.members[1].id, share: '0.5' }] }]
     data.expenses = [{ ...data.expenses[0], monthlyAmount: { amount: '40000', currency: 'TWD' } }]
-    data.liabilities = [{ ...data.liabilities[0], monthlyPayment: { amount: '20000', currency: 'TWD' } }]
+    data.liabilities = [{ ...data.liabilities[0], repaymentType: 'fixedPayment', monthlyPayment: { amount: '20000', currency: 'TWD' } }]
     data.contributions = [{ ...data.contributions[0], amount: { amount: '15000', currency: 'TWD' } }]
     const service = new PlannerService({ load: async () => null, save: async () => undefined, clear: async () => undefined })
     expect(service.financialOverview(data).household).toMatchObject({ monthlyIncomeTwd: '100000.00', monthlyExpenseTwd: '40000.00', monthlyDebtPaymentTwd: '20000.00', monthlyContributionTwd: '15000.00', unallocatedTwd: '25000.00' })

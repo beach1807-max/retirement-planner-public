@@ -189,6 +189,20 @@ export interface ProjectionLaborPension {
   status: DataStatus
 }
 
+export interface ProjectionLiability {
+  id: string
+  name: string
+  balanceAsOfMonth: string
+  currentBalanceTwd: string
+  annualInterestRate?: string
+  repaymentType?: import('./liability-engine').LiabilityRepaymentType
+  remainingTermMonths?: number
+  fixedMonthlyPaymentTwd?: string
+  gracePeriodMonths?: number
+  rateChanges?: Array<{ fromMonth: string; annualInterestRate: string }>
+  extraPayments?: Array<{ month: string; amountTwd: string }>
+}
+
 export interface ProjectionInput {
   customScenario?: { returnAdjustment: string; adjustLaborPension: boolean }
   targetRetirementMonth?: string
@@ -198,6 +212,7 @@ export interface ProjectionInput {
   assets: ProjectionAsset[]
   contributions: ProjectionContribution[]
   laborPensions: ProjectionLaborPension[]
+  liabilities?: ProjectionLiability[]
 }
 
 export interface ProjectionMilestone {
@@ -207,6 +222,10 @@ export interface ProjectionMilestone {
   laborPensionAssetsNominal: string
   totalAssetsNominal: string
   totalAssetsReal: string
+  remainingLiabilitiesNominal: string
+  remainingLiabilitiesReal: string
+  investmentAssetsLessLiabilitiesNominal: string
+  investmentAssetsLessLiabilitiesReal: string
 }
 
 export interface ProjectionScenario {
@@ -229,4 +248,6 @@ export interface ProjectionResult {
   warnings: CalculationMessage[]
   includedAssetIds: string[]
   excludedAssets: Array<{ id: string; reason: string }>
+  liabilityResults: import('./liability-engine').LiabilityProjectionResult[]
+  allLiabilitiesPayoffMonth?: string
 }

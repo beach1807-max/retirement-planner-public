@@ -26,7 +26,7 @@ describe('JSON 備份', () => {
       contributions: original.contributions.map((item) => ({ id: item.id, householdId: item.householdId, sourceMemberId: item.sourceMemberId, amountTwd: item.amount.amount, usageScope: item.usageScope, startDate: item.startDate, endRule: item.endRule, endDate: item.endDate, destinationAssetId: item.destinationAssetId, returnProfileId: item.returnProfileId, status: item.status })),
     }
     const restored = parseBackup(JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.1', exportedAt: original.updatedAt, data }))
-    expect(restored.schemaVersion).toBe('planner-data-v0.9')
+    expect(restored.schemaVersion).toBe('planner-data-v0.11')
     expect(restored.household.createdAt).toBe(original.updatedAt)
   })
 
@@ -41,8 +41,9 @@ describe('JSON 備份', () => {
     const legacyScenario = { ...original.scenarios[0], version: 'scenario-v0.1', overrides: { plannedRetirementMonth: '2035-01', additionalMonthlyContributionTwd: '5000', primaryLaborPensionVoluntaryRate: '0.06' } }
     const legacy = { ...original, schemaVersion: 'planner-data-v0.8', assumptions: { ...original.assumptions, assetReturnPresets: undefined }, scenarios: [legacyScenario] }
     const restored = parseBackup(JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.8', exportedAt: original.updatedAt, data: legacy }))
-    expect(restored.schemaVersion).toBe('planner-data-v0.10')
+    expect(restored.schemaVersion).toBe('planner-data-v0.11')
     expect(restored.assets).toEqual(original.assets)
     expect(restored.scenarios[0].overrides).toMatchObject({ memberRetirement: [{ memberId: original.household.primaryMemberId, plannedRetirementMonth: '2035-01' }], additionalContributions: [{ amountTwd: '5000' }], retirementSystems: [{ laborPensionVoluntaryRate: '0.06' }] })
+    expect(restored.liabilities[0]).toMatchObject({ currentBalance: original.liabilities[0].currentBalance, monthlyPayment: original.liabilities[0].monthlyPayment, repaymentType: 'manual', includeInTotalLiabilities: true })
   })
 })

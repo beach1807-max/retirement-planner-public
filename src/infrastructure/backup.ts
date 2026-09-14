@@ -82,15 +82,31 @@ const v10DataSchema = v09DataSchema.omit({ schemaVersion: true, instruments: tru
   schemaVersion: z.literal('planner-data-v0.10'),
   instruments: z.array(z.object({ id: z.string(), householdId: z.string(), assetId: z.string(), symbol: z.string(), market: z.enum(['TWSE', 'TPEX', 'US']), mic: z.enum(['XTAI', 'ROCO', 'XNAS', 'XNYS', 'ARCX', 'US']).optional(), providerSymbol: z.string().optional(), instrumentKey: z.string().optional(), currency: z.enum(['TWD', 'USD']), instrumentType: z.enum(['stock', 'etf']).optional(), timezone: z.string().optional(), ...timestamp })),
 })
+const v11DataSchema = v10DataSchema.omit({ schemaVersion: true, liabilities: true }).extend({
+  schemaVersion: z.literal('planner-data-v0.11'),
+  liabilities: z.array(z.object({
+    id: z.string(), householdId: z.string(), name: z.string(),
+    liabilityType: z.enum(['mortgage', 'personalLoan', 'carLoan', 'studentLoan', 'creditCardInstallment', 'other']),
+    currentBalance: moneySchema, monthlyPayment: moneySchema, originalPrincipal: moneySchema.optional(),
+    balanceAsOfMonth: z.string().optional(), annualInterestRate: z.string().optional(),
+    repaymentType: z.enum(['levelPayment', 'equalPrincipal', 'fixedPayment', 'interestOnly', 'balloon', 'manual']).optional(),
+    remainingTermMonths: z.number().int().positive().optional(), gracePeriodMonths: z.number().int().nonnegative().optional(),
+    includeInTotalLiabilities: z.boolean().optional(),
+    selectedCapabilities: z.array(z.enum(['originalPrincipal', 'annualInterestRate', 'remainingTermMonths', 'monthlyPayment', 'gracePeriod'])).optional(),
+    rateChanges: z.array(z.object({ fromMonth: z.string(), annualInterestRate: z.string() })).optional(),
+    extraPayments: z.array(z.object({ month: z.string(), amount: moneySchema })).optional(), notes: z.string().optional(),
+    status: z.enum(['provided', 'notProvided', 'notApplicable']), ...ownershipSchema, ...timestamp,
+  })),
+})
 
 export function serializeBackup(data: PlannerData): string {
-  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.10', exportedAt: new Date().toISOString(), data }, null, 2)
+  return JSON.stringify({ backupVersion: 'retirement-planner-backup-v0.11', exportedAt: new Date().toISOString(), data }, null, 2)
 }
 
 export function parseBackup(value: string): PlannerData {
   const parsed = JSON.parse(value) as { backupVersion?: string; data?: unknown }
-  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7', 'retirement-planner-backup-v0.8', 'retirement-planner-backup-v0.9', 'retirement-planner-backup-v0.10'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
-  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.7' ? v07DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.8' ? v08DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.9' ? v09DataSchema.parse(parsed.data) : v10DataSchema.parse(parsed.data)
+  if (!['retirement-planner-backup-v0.1', 'retirement-planner-backup-v0.2', 'retirement-planner-backup-v0.3', 'retirement-planner-backup-v0.4', 'retirement-planner-backup-v0.5', 'retirement-planner-backup-v0.6', 'retirement-planner-backup-v0.7', 'retirement-planner-backup-v0.8', 'retirement-planner-backup-v0.9', 'retirement-planner-backup-v0.10', 'retirement-planner-backup-v0.11'].includes(parsed.backupVersion ?? '')) throw new Error('UNSUPPORTED_BACKUP_VERSION')
+  const source = parsed.backupVersion === 'retirement-planner-backup-v0.1' ? v01DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.2' ? v02DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.3' ? v03DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.4' ? v04DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.5' ? v05DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.6' ? v06DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.7' ? v07DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.8' ? v08DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.9' ? v09DataSchema.parse(parsed.data) : parsed.backupVersion === 'retirement-planner-backup-v0.10' ? v10DataSchema.parse(parsed.data) : v11DataSchema.parse(parsed.data)
   const migrated = migratePlannerData(source)
   validatePlannerData(migrated)
   return migrated
