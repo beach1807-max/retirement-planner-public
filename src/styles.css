@@ -327,6 +327,105 @@ label small { color: var(--muted); font-weight: 500; line-height: 1.45; }
   .demo-banner { align-items: stretch; }
 }
 
+/* Currency Input & Chinese Unit Badge */
+.currency-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.currency-input-field-wrap {
+  width: 100%;
+}
+.currency-input-element {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.currency-chinese-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  color: var(--primary-2);
+  border: 1px solid rgba(28, 107, 74, 0.18);
+}
+
+/* Demo Banner Enhancement */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  background: #fdf8eb;
+  border: 1px solid #ebd9a4;
+  border-radius: 12px;
+  color: #725000;
+}
+.demo-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 6px;
+  background: #d5a94e;
+  color: var(--primary);
+}
+.demo-banner-text {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #5c4103;
+}
+.demo-exit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Delta & Purchasing Power Impact */
+.purchasing-power-tag {
+  display: block;
+}
+.inflation-impact {
+  color: var(--warning);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.joint-share-status {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.joint-share-status.valid {
+  background: #eef8f2;
+  color: var(--primary-2);
+  border: 1px solid rgba(28, 107, 74, 0.2);
+}
+.joint-share-status.invalid {
+  background: #fdf2f2;
+  color: var(--danger);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }

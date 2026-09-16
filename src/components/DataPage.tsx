@@ -5,6 +5,7 @@ import type { PlannerAsset, PlannerContribution, PlannerData } from '../applicat
 import { FinancialDataSections } from './FinancialDataSections'
 import type { DashboardViewModel } from '../application/planner-service'
 import { CalculationHelp } from './CalculationHelp'
+import { CurrencyInput } from './CurrencyInput'
 
 interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -106,7 +107,7 @@ export function DataPage({ data, onChange, summary }: Props) {
         <h3>基本資料</h3><p className="muted">這是什麼、現在值多少、是誰的。</p><div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} /></label>
           <label>類型<select name="assetType" defaultValue={editedAsset?.assetType}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
-          <label>目前價值（TWD）<input name="currentValue" type="number" required min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /></label>
+          <label>目前價值（TWD）<CurrencyInput ariaLabel="目前價值（TWD）" name="currentValue" required defaultValue={editedAsset?.currentValue.amount} /></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>
           {ownershipType === 'individual' && <label>所屬成員<select name="ownerMemberId" defaultValue={editedAsset?.ownerMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
           {ownershipType === 'joint' && data.members.map((member) => <label key={member.id}>{member.name} 持分（%）<input name={`share-${member.id}`} type="number" min="0" max="100" step="0.01" defaultValue={Number(editedAsset?.owners?.find((owner) => owner.memberId === member.id)?.share ?? 0) * 100 || undefined} /></label>)}
@@ -134,7 +135,7 @@ export function DataPage({ data, onChange, summary }: Props) {
         <div className="context-help-row" aria-label="投入欄位說明"><CalculationHelp label="每月投入" topic="contribution" /><CalculationHelp label="停止規則" topic="contributionEnd" /></div>
         <div className="form-grid three">
           <label>來源成員<select name="sourceMemberId" defaultValue={editedContribution?.sourceMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-          <label>每月金額（TWD）<input name="amount" type="number" min="0" step="0.01" required defaultValue={editedContribution?.amount.amount} /></label>
+          <label>每月金額（TWD）<CurrencyInput ariaLabel="每月金額（TWD）" name="amount" required defaultValue={editedContribution?.amount.amount} /></label>
           <label>資料狀態<select name="status" defaultValue={editedContribution?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>使用範圍<select name="usageScope" defaultValue={editedContribution?.usageScope ?? 'household'}><option value="personal">來源成員個人</option><option value="household">家庭退休可用</option></select></label>
           <label>開始日期<input name="startDate" type="date" required defaultValue={editedContribution?.startDate ?? data.calculationBaseDate} /></label>
