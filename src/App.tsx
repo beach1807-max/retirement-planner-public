@@ -9,6 +9,7 @@ import { ScenarioService } from './application/scenario-service'
 import { MarketDataService } from './application/market-data-service'
 import type { ProjectionResult } from './domain/models'
 import { Onboarding } from './components/Onboarding'
+import { DemoBanner } from './components/DemoBanner'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 import { createDefaultMarketDataProvider } from './infrastructure/us-market-data-router'
 import { MobileNavigation } from './components/MobileNavigation'
@@ -177,7 +178,7 @@ export function App() {
         </header>
 
         {persistenceError && <div className="alert error" role="alert">{persistenceError}</div>}
-        {demoData && <div className="alert info demo-banner" role="status"><span>目前正在使用展示資料，這些不是你的正式資料。</span><span><button className="button small" type="button" onClick={() => { setDemoData(null); navigate('dashboard') }}>離開展示模式</button>{!data && <button className="button small" type="button" onClick={() => setDemoData(null)}>建立我的規劃</button>}</span></div>}
+        {demoData && <DemoBanner onExitDemo={() => { setDemoData(null); navigate('dashboard') }} />}
         {(offlineReady || needRefresh) && (
           <div className="update-toast" role="status">
             <span>{needRefresh ? '有新版可以使用。' : '已可離線使用。'}</span>

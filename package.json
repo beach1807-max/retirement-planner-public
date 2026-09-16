@@ -17,8 +17,9 @@
     "lint": "eslint .",
     "icons": "node scripts/generate-icons.mjs",
     "check": "npm run lint && npm run test && npm run build",
-    "deploy:preview": "wrangler pages deploy dist --project-name retirement-planner-public --branch preview",
-    "deploy": "wrangler pages deploy dist --project-name retirement-planner-public"
+    "deploy": "npm run deploy:preview",
+    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name retirement-planner-public --branch preview && npm run deploy:verify",
+    "deploy:verify": "wrangler pages deployment list --project-name retirement-planner-public"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

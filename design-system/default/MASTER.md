@@ -19,18 +19,19 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#0F172A` | `--color-primary` |
-| On Primary | `#FFFFFF` | `--color-on-primary` |
-| Secondary | `#1E293B` | `--color-secondary` |
-| Accent/CTA | `#22C55E` | `--color-accent` |
-| Background | `#020617` | `--color-background` |
-| Foreground | `#F8FAFC` | `--color-foreground` |
-| Muted | `#1A1E2F` | `--color-muted` |
-| Border | `#334155` | `--color-border` |
-| Destructive | `#EF4444` | `--color-destructive` |
-| Ring | `#0F172A` | `--color-ring` |
+| Primary (Deep Forest) | `#12372a` | `--primary` |
+| Primary 2 (Herbal Green) | `#1c6b4a` | `--primary-2` |
+| Accent/CTA (Classic Gold) | `#d5a94e` | `--accent` |
+| Surface (Clean White) | `#ffffff` | `--surface` |
+| Surface Subtle (Tinted) | `#eef4ef` | `--surface-subtle` |
+| Background | `#f4f7f4` | `--background` |
+| Foreground / Text | `#17251f` | `--color` |
+| Muted Text | `#617069` | `--muted` |
+| Border | `#d8e2da` | `--border` |
+| Destructive / Danger | `#b42318` | `--danger` |
+| Warning | `#a15c00` | `--warning` |
 
-**Color Notes:** Dark bg + green positive indicators
+**Color Notes:** 典雅穩健的台灣金融綠意色調，搭配高貴溫暖的金色點綴，營造可信賴、平靜且專業的理財與資產規劃氣質。
 
 ### Typography
 

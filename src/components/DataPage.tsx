@@ -13,6 +13,7 @@ import { inferTwseSymbolFromAssetName, isMarketTrackableAssetType, type Supporte
 import { upsertAssetMarketLink } from '../application/asset-market-link'
 import { removeAsset, type QuickAssetDraft } from '../application/quick-add-asset'
 import { QuickAddAsset } from './QuickAddAsset'
+import { CurrencyInput } from './CurrencyInput'
 
 interface Props { summary: DashboardViewModel; data: PlannerData; onChange: (data: PlannerData) => void | Promise<void>; onQuickAdd?: (draft: QuickAssetDraft) => Promise<boolean>; onOpenPortfolio?: () => void }
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -166,7 +167,7 @@ export function DataPage({ data, onChange, summary, onQuickAdd, onOpenPortfolio 
         <h3>基本資料</h3><p className="muted">這是什麼、現在值多少、是誰的。</p><div className="form-grid three">
           <label>資產名稱<input name="name" required defaultValue={editedAsset?.name} onChange={(event) => { if (!symbol) setSymbol(inferTwseSymbolFromAssetName(event.target.value) ?? '') }} /></label>
           <label>類型<select name="assetType" value={assetType} onChange={(event) => { const nextType = event.target.value as PlannerAsset['assetType']; setAssetType(nextType); if (allocationMode === 'auto') setAllocationClass(defaultAllocationClassForAssetType(nextType)); if (isMarketTrackableAssetType(nextType)) { setMarketTracking(true); setPredictionSettingsOpen(true) } else setMarketTracking(false) }}><option value="cash">現金</option><option value="timeDeposit">定存</option><option value="stock">股票</option><option value="etf">ETF</option><option value="bond">債券</option><option value="fund">基金</option><option value="moneyMarketFund">貨幣市場基金</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirementAccount">退休帳戶</option><option value="other">其他</option></select></label>
-          <label>目前價值（{assetCurrency}）<input name="currentValue" type="number" required={!marketTracking} min="0" step="0.01" defaultValue={editedAsset?.currentValue.amount} /><small>{marketTracking ? '選填；尚未取得行情時使用，留白以 0 元建立。' : '未使用行情追蹤時必填。'}</small></label>
+          <label>目前價值（{assetCurrency}）<CurrencyInput ariaLabel={`目前價值（${assetCurrency}）`} name="currentValue" required={!marketTracking} defaultValue={editedAsset?.currentValue.amount} /><small>{marketTracking ? '選填；尚未取得行情時使用，留白以 0 元建立。' : '未使用行情追蹤時必填。'}</small></label>
           <label>所有權<select name="ownershipType" value={ownershipType} onChange={(event) => setOwnershipType(event.target.value as PlannerAsset['ownershipType'])}><option value="individual">個人</option><option value="joint" disabled={data.members.length < 2}>共同持有</option><option value="household">家庭層級</option></select></label>
           {ownershipType === 'individual' && <label>所屬成員<select name="ownerMemberId" defaultValue={editedAsset?.ownerMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
           {ownershipType === 'joint' && data.members.map((member) => <label key={member.id}>{member.name} 持分（%）<input name={`share-${member.id}`} type="number" min="0" max="100" step="0.01" defaultValue={Number(editedAsset?.owners?.find((owner) => owner.memberId === member.id)?.share ?? 0) * 100 || undefined} /></label>)}
@@ -199,7 +200,7 @@ export function DataPage({ data, onChange, summary, onQuickAdd, onOpenPortfolio 
         <div className="context-help-row" aria-label="投入欄位說明"><CalculationHelp label="每月投入" topic="contribution" /><CalculationHelp label="停止規則" topic="contributionEnd" /></div>
         <div className="form-grid three">
           <label>投入名稱（選填）<input name="contributionName" defaultValue={editedContribution?.name} placeholder="例如：每月薪資投入" /></label><label>來源成員<select name="sourceMemberId" defaultValue={editedContribution?.sourceMemberId}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-          <label>每月金額（TWD）<input name="amount" type="number" min="0" step="0.01" required defaultValue={editedContribution?.amount.amount} /></label>
+          <label>每月金額（TWD）<CurrencyInput ariaLabel="每月金額（TWD）" name="amount" required defaultValue={editedContribution?.amount.amount} /></label>
           <label>設定狀態<select name="status" defaultValue={editedContribution?.status ?? 'provided'}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>只表示資料是否完成設定；是否納入計算仍依投入與資產範圍判斷。</small></label>
           <label>使用範圍<select name="usageScope" defaultValue={editedContribution?.usageScope ?? 'household'}><option value="personal">來源成員個人</option><option value="household">家庭退休可用</option></select></label>
           <label>開始日期<input name="startDate" type="date" required defaultValue={editedContribution?.startDate ?? data.calculationBaseDate} /></label>

@@ -24,14 +24,15 @@ npm run check
 npm run test:e2e
 ```
 
-部署至獨立的 Cloudflare Pages 專案：
+目前公版驗收環境固定為 Cloudflare Pages 專案 `retirement-planner-public` 的 `preview` 分支：
 
 ```bash
-npm run build
 npm run deploy
 ```
 
-專案識別為 `retirement-planner-public`，與私人來源專案完全分離。此公開版由來源提交 `65dfca0874902763ee723c119f10869248949aef` 建立；備份格式仍相容 `retirement-planner-backup-v0.1` 至 `v0.8`。
+此命令會先建置，再明確使用 `--project-name retirement-planner-public --branch preview` 上傳，最後列出部署記錄供核對。驗收網址為 `https://preview.retirement-planner-public.pages.dev/`。完整流程與架構請見 `docs/部署手冊.md`。
+
+專案識別為 `retirement-planner-public`，與私版 `retirement-planner-pwa` 完全分離；備份格式仍相容 `retirement-planner-backup-v0.1` 至 `v0.8`。
 
 ## 聲明
 
