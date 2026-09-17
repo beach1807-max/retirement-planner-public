@@ -53,7 +53,7 @@ describe('新手資料流程', () => {
     await user.click(screen.getByRole('button', { name: '新增資產' }))
     await user.type(screen.getByLabelText('資產名稱'), '0050')
     await user.selectOptions(screen.getByLabelText('類型'), 'etf')
-    expect(screen.getByLabelText(/投資配置分類/)).toHaveValue('stock')
+    expect(screen.getByRole('combobox', { name: /投資配置分類/ })).toHaveValue('stock')
     expect(screen.getByLabelText('使用市場行情更新目前價值')).toBeChecked()
     expect(screen.getByLabelText('上市代碼')).toHaveValue('0050')
     await user.type(screen.getByLabelText('持有數量'), '3000')

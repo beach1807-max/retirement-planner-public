@@ -216,20 +216,20 @@ test('負債可推估清償時間並與投資預測共同呈現', async ({ page 
 
 test('計算名詞問號可開啟、切換並以 Escape 關閉說明', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
-  const scenarioHelp = page.getByRole('button', { name: '說明：預設與自訂報酬情境' })
+  const scenarioHelp = page.getByRole('button', { name: '說明：報酬情境' }).first()
   await scenarioHelp.click()
-  await expect(page.getByRole('dialog', { name: '預設與自訂報酬情境計算說明' })).toContainText('保守 = 原報酬率 − 2 個百分點')
+  await expect(page.getByRole('dialog', { name: '報酬情境說明' })).toContainText('相同本金與投入')
   await expect(scenarioHelp).toHaveAttribute('aria-expanded', 'true')
   await page.screenshot({ path: testInfo.outputPath('calculation-help.png'), fullPage: false })
 
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: '預設與自訂報酬情境計算說明' })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: '報酬情境說明' })).toHaveCount(0)
 })
 
 test('可保存一次性支出並重新產生預測', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await navigateTo(page, '預測設定', isMobile)
-  await page.getByText('舊版退休試算資料（選填）', { exact: true }).click()
+  await page.getByText('退休生活需求試算資料（選填）', { exact: true }).click()
   await page.getByLabel('項目', { exact: true }).fill('整修支出')
   await page.getByLabel('月份', { exact: true }).fill('2045-06')
   await page.getByLabel('金額', { exact: true }).fill('500000')
@@ -379,7 +379,7 @@ test('視覺稽核截圖', async ({ page, isMobile }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('settings.png'), fullPage: true })
 })
 
-test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保留', async ({ page, isMobile }, testInfo) => {
+test('年份、範圍與自訂報酬可互動，勞退請領方式重新開啟仍保留', async ({ page, isMobile }, testInfo) => {
   await page.getByRole('button', { name: '先使用展示資料體驗' }).click()
   await page.getByLabel('查看時間').selectOption('25')
   await expect(page.locator('.projection-table tbody tr')).toHaveCount(1)
@@ -408,11 +408,11 @@ test('年份、範圍與自訂報酬可互動，勞退模式重新開啟仍保�
   const primary = page.locator('section.panel').filter({ hasText: '主要規劃人 A' })
   await primary.getByText(/勞保老年年金設定/).click()
   await primary.getByText(/勞退新制退休金設定/).click()
-  await primary.getByLabel('勞退請領模式').selectOption('lumpSum')
+  await primary.getByRole('combobox', { name: /勞退請領方式/ }).selectOption('lumpSum')
   await primary.getByRole('button', { name: '儲存並估算' }).click()
   await expect(primary.getByText(/選擇一次領/)).toBeVisible()
   await primary.getByLabel('目前勞保投保年資（年）').fill('20.5')
-  await primary.getByLabel('勞退請領模式').selectOption('monthly')
+  await primary.getByRole('combobox', { name: /勞退請領方式/ }).selectOption('monthly')
   await primary.getByRole('button', { name: '儲存並估算' }).click()
   await expect(primary.getByText(/目前 20.5 年 ＋ 預估續保/)).toBeVisible()
   await expect(primary.getByText(/首期月領約/)).toBeVisible()

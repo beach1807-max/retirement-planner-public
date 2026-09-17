@@ -9,6 +9,7 @@ import { MassiveInstrumentReferenceProvider } from '../infrastructure/massive-ma
 import { exchangeRateFor, formatMoney } from '../application/money'
 import { resolveAssetReturnPresetKey } from '../domain/default-return-presets'
 import type { SupportedMarket } from '../domain/market-trackable'
+import { BASE_SCENARIO_OPTIONS, UI_TERMS } from '../content/terminology'
 
 export interface QuickAddProps {
   data: PlannerData
@@ -130,13 +131,13 @@ export function QuickAddAsset({ data, onCommit, onCancel, onComplete, lookup = d
           {draft.ownershipType === 'individual' && <label>持有人<select value={draft.ownerMemberId} onChange={(e) => patch({ ownerMemberId: e.target.value })}>{data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>}
           {draft.ownershipType === 'joint' && data.members.map((m) => <label key={m.id}>{m.name}持分（%）<input type="number" min="0" max="100" step="any" value={draft.shares[m.id] ?? ''} onChange={(e) => patch({ shares: { ...draft.shares, [m.id]: e.target.value } })} /></label>)}
           <label>可動用日期<input type="date" required value={draft.availableFrom} onChange={(e) => patch({ availableFrom: e.target.value })} /></label>
-          <label>既有退休試算使用範圍<select value={draft.retirementUsageScope} onChange={(e) => patch({ retirementUsageScope: e.target.value as QuickAssetDraft['retirementUsageScope'] })}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入既有退休試算</option></select><small>此設定不取代上方的組合／長期預測選取。</small></label>
+          <label>{UI_TERMS.retirementNeedsUsageScope}<select value={draft.retirementUsageScope} onChange={(e) => patch({ retirementUsageScope: e.target.value as QuickAssetDraft['retirementUsageScope'] })}><option value="personal">個人退休使用</option><option value="household">家庭退休可用</option><option value="excluded">不納入退休生活需求試算</option></select><small>此設定不取代上方的組合／長期預測選取。</small></label>
           <label>投資地區<select value={draft.region} onChange={(e) => patch({ region: e.target.value as QuickAssetDraft['region'] })}><option value="">未指定</option><option value="taiwan">台灣</option><option value="us">美國</option><option value="global">全球</option><option value="other">其他</option></select><small>掛牌市場不等於投資地區。</small></label>
           <label>風險分類<select value={draft.riskLevel} onChange={(e) => patch({ riskLevel: e.target.value as QuickAssetDraft['riskLevel'] })}><option value="">未指定</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
-          <label>既有退休試算報酬設定<select value={draft.returnProfileId} onChange={(e) => patch({ returnProfileId: e.target.value })}><option value="">未設定（0%）</option>{data.assumptions.returnProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <label>{UI_TERMS.retirementNeedsPlanning}報酬設定<select value={draft.returnProfileId} onChange={(e) => patch({ returnProfileId: e.target.value })}><option value="">未設定（0%）</option>{data.assumptions.returnProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
           <label className="checkbox-row"><input type="checkbox" checked={draft.includeInTotalAssets} onChange={(e) => patch({ includeInTotalAssets: e.target.checked })} />納入總資產</label>
-        </div><fieldset><legend>長期預測三情境報酬</legend><p className="muted">沿用目前系統的{preset.label}預設；與既有退休試算報酬設定分開。</p><label className="checkbox-row"><input type="checkbox" checked={Boolean(draft.customRates)} onChange={(e) => { setRateInputs({}); patch({ customRates: e.target.checked ? { ...preset.scenarioRates } : undefined }) }} />自訂此筆三情境報酬</label>
-          <div className="form-grid three">{([['conservative', '保守'], ['balanced', '穩健'], ['optimistic', '樂觀']] as const).map(([key, label]) => <label key={key}>{label}年報酬（%）<input type="text" inputMode="decimal" disabled={!draft.customRates} value={draft.customRates && rateInputs[key] !== undefined ? rateInputs[key] : new Decimal((draft.customRates ?? preset.scenarioRates)[key] || '0').mul(100).toString()} onChange={(e) => { const raw = e.target.value; setRateInputs((current) => ({ ...current, [key]: raw })); patch({ customRates: { ...draft.customRates!, [key]: raw.trim() && Number.isFinite(Number(raw)) ? new Decimal(raw).div(100).toString() : '' } }) }} /></label>)}</div>
+        </div><fieldset><legend>長期預測三情境報酬</legend><p className="muted">沿用目前系統的{preset.label}預設；與{UI_TERMS.retirementNeedsPlanning}報酬設定分開。</p><label className="checkbox-row"><input type="checkbox" checked={Boolean(draft.customRates)} onChange={(e) => { setRateInputs({}); patch({ customRates: e.target.checked ? { ...preset.scenarioRates } : undefined }) }} />自訂此筆三情境報酬</label>
+          <div className="form-grid three">{BASE_SCENARIO_OPTIONS.map(([key, label]) => <label key={key}>{label}年報酬（%）<input type="text" inputMode="decimal" disabled={!draft.customRates} value={draft.customRates && rateInputs[key] !== undefined ? rateInputs[key] : new Decimal((draft.customRates ?? preset.scenarioRates)[key] || '0').mul(100).toString()} onChange={(e) => { const raw = e.target.value; setRateInputs((current) => ({ ...current, [key]: raw })); patch({ customRates: { ...draft.customRates!, [key]: raw.trim() && Number.isFinite(Number(raw)) ? new Decimal(raw).div(100).toString() : '' } }) }} /></label>)}</div>
         </fieldset></details>
       </>}
       {error && <div className="field-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</div>}
@@ -154,6 +155,6 @@ export function QuickAddAsset({ data, onCommit, onCancel, onComplete, lookup = d
 
 function friendlyError(message: string): string {
   if (message.includes('OWNER') || message.includes('SHARE')) return '請確認持有人；共同持分需至少兩位成員且合計 100%。'
-  if (message.includes('SCENARIO_RATES') || message.includes('DecimalError')) return '三情境報酬須介於 -99% 至 100%，且保守 ≤ 穩健 ≤ 樂觀。'
+  if (message.includes('SCENARIO_RATES') || message.includes('DecimalError')) return '三情境報酬須介於 -99% 至 100%，且保守 ≤ 穩健 ≤ 比較樂觀。'
   return message.startsWith('INVALID_') ? '資料欄位或關聯無效，請確認進階設定。' : message
 }

@@ -40,7 +40,7 @@ export function CalculationHelp({ topic, label, align = 'start' }: Props) {
   return <span className="calculation-help" ref={rootRef}>
     {label && <span className="calculation-help-label">{label}</span>}
     <button type="button" className="calculation-help-trigger" aria-label={`說明：${content.title}`} aria-expanded={open} aria-controls={popoverId} onClick={toggle}><HelpCircle size={17} aria-hidden="true" /></button>
-    {open && <span className={`calculation-help-popover ${align === 'end' ? 'align-end' : ''}`} id={popoverId} role="dialog" aria-label={`${content.title}計算說明`}>
+    {open && <span className={`calculation-help-popover ${align === 'end' ? 'align-end' : ''}`} id={popoverId} role="dialog" aria-label={`${content.title}說明`}>
       <span className="calculation-help-heading"><strong>{content.title}</strong><button type="button" className="calculation-help-close" aria-label={`關閉${content.title}說明`} onClick={() => setOpen(false)}><X size={16} aria-hidden="true" /></button></span>
       <span className="calculation-help-summary">{content.summary}</span>
       {content.formula && <code>{content.formula}</code>}

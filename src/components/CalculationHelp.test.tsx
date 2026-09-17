@@ -11,7 +11,7 @@ describe('計算規則說明', () => {
     const trigger = screen.getByRole('button', { name: '說明：今天購買力' })
     await user.click(trigger)
 
-    expect(screen.getByRole('dialog', { name: '今天購買力計算說明' })).toBeVisible()
+    expect(screen.getByRole('dialog', { name: '今天購買力說明' })).toBeVisible()
     expect(screen.getByText(/未來名目金額 ÷/)).toBeVisible()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
 
@@ -25,8 +25,8 @@ describe('計算規則說明', () => {
 
     await user.click(screen.getByRole('button', { name: '說明：名目金額' }))
     await user.click(screen.getByRole('button', { name: '說明：年通膨率' }))
-    expect(screen.queryByRole('dialog', { name: '名目金額計算說明' })).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: '年通膨率計算說明' })).toBeVisible()
+    expect(screen.queryByRole('dialog', { name: '名目金額說明' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '年通膨率說明' })).toBeVisible()
 
     fireEvent.pointerDown(screen.getByTestId('outside'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

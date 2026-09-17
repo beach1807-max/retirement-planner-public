@@ -13,6 +13,8 @@ import { DemoBanner } from './components/DemoBanner'
 import { DexiePlannerRepository } from './infrastructure/dexie-planner-repository'
 import { createDefaultMarketDataProvider } from './infrastructure/us-market-data-router'
 import { MobileNavigation } from './components/MobileNavigation'
+import { CalculationHelp } from './components/CalculationHelp'
+import { UI_TERMS } from './content/terminology'
 
 type Page = 'dashboard' | 'data' | 'retirementSystems' | 'portfolio' | 'scenarios' | 'market' | 'settings' | 'backup'
 
@@ -173,7 +175,7 @@ export function App() {
           </div>
           <div className="topbar-meta">
             <span>主要規劃人：{primary?.name}</span>
-            <span>基準日：{activeData.calculationBaseDate}</span>
+            <span><CalculationHelp label={`${UI_TERMS.calculationBaseDate}：${activeData.calculationBaseDate}`} topic="calculationBaseDate" align="end" /></span>
           </div>
         </header>
 

@@ -8,7 +8,7 @@ const HORIZONS = [10, 15, 20, 25, 30, 35] as const
 const SCENARIOS: Array<Pick<ProjectionScenario, 'id' | 'label' | 'returnAdjustment'>> = [
   { id: 'conservative', label: '保守', returnAdjustment: '-0.02' },
   { id: 'balanced', label: '穩健', returnAdjustment: '0' },
-  { id: 'optimistic', label: '樂觀', returnAdjustment: '0.02' },
+  { id: 'optimistic', label: '比較樂觀', returnAdjustment: '0.02' },
 ]
 
 const money = (value: Decimal) => value.toDecimalPlaces(2).toFixed(2)

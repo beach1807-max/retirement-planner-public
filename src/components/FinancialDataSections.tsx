@@ -4,6 +4,7 @@ import { Landmark, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { OwnershipFields, PlannerAccount, PlannerData, PlannerExpense, PlannerHolding, PlannerIncome, PlannerLiability } from '../application/planner-data'
 import { projectLiability } from '../domain/liability-engine'
 import { CurrencyInput } from './CurrencyInput'
+import { CalculationHelp } from './CalculationHelp'
 
 interface Props { data: PlannerData; onChange: (data: PlannerData) => void | Promise<void> }
 type Kind = 'account' | 'holding' | 'income' | 'expense' | 'liability'
@@ -119,7 +120,7 @@ export function FinancialDataSections({ data, onChange }: Props) {
     <div className="panel-heading"><div><h2><Landmark size={21} /> 收支、負債與帳戶</h2><p>收入不會自動視為可投入金額；這裡保存家庭財務基礎與資料完整度。</p></div></div>
     <div className="action-row">{(['income', 'expense', 'liability', 'account', 'holding'] as Kind[]).map((kind) => <button key={kind} className="button secondary small" disabled={kind === 'holding' && (data.accounts.length === 0 || data.assets.length === 0)} onClick={() => open(kind)}><Plus size={16} /> {labels[kind]}</button>)}</div>
     {editor && <form key={`${editor.kind}-${editor.id}`} className="editor-form" onSubmit={save}>
-      <h3>{editor.id === 'new' ? '新增' : '編輯'}{labels[editor.kind]}</h3><div className="form-grid three">
+      <h3>{editor.id === 'new' ? '新增' : '編輯'}{labels[editor.kind]}</h3>{editor.kind === 'liability' && <div className="context-help-row" aria-label="負債欄位說明"><CalculationHelp label="剩餘本金" topic="liabilityBalance" /><CalculationHelp label="還款方式" topic="repaymentMethod" /><CalculationHelp label="寬限期" topic="gracePeriod" /></div>}<div className="form-grid three">
         {editor.kind !== 'holding' && <label>名稱<input name="name" required defaultValue={edited && 'name' in edited ? edited.name : ''} /></label>}
         <label>設定狀態<select name="status" defaultValue={edited?.status ?? 'provided'}><option value="provided">已設定</option><option value="notProvided">尚未設定</option><option value="notApplicable">不適用</option></select><small>只表示這筆資料是否已完成設定；是否納入計算仍依各項範圍設定判斷。</small></label>
         {editor.kind === 'account' && <><label>機構<input name="institution" defaultValue={edited && 'institution' in edited ? edited.institution : ''} /></label><label>帳戶類型<select name="accountType" defaultValue={edited && 'accountType' in edited ? edited.accountType : 'bank'}><option value="cash">現金</option><option value="bank">銀行</option><option value="brokerage">證券</option><option value="insurance">保險</option><option value="property">不動產</option><option value="retirement">退休帳戶</option><option value="other">其他</option></select></label></>}
